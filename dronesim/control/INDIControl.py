@@ -445,6 +445,8 @@ class INDIControl(BaseControl):
 
         thrust = self.last_thrust + control_increment[2]
 
+        target_euler = np.array([0,0,0])
+
         return thrust, target_euler, pos_e, target_quat #quat_increment
     
     ################################################################################
@@ -534,6 +536,7 @@ class INDIControl(BaseControl):
         indi_v[2] = angular_accel_ref.r - angular_accel[2]
         indi_v[3] = thrust - self.last_thrust #* 0.
         self.last_thrust = thrust
+
 
         indi_du = np.dot(np.linalg.pinv(self.G1),indi_v)
         self.cmd += indi_du

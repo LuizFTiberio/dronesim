@@ -17,12 +17,12 @@ import sys
 from dronesim.utils.utils import calculate_propeller_forces_moments
 from dronesim.database.propeller_database import *
 
-filename = "../dronesim/utils/kriging_thrust.pkl"
+filename = "../dronesim/utils/kpls_thrust.pkl"
 with open(filename, "rb") as thrust:
    thrust_model = pickle.load(thrust)
 
 torque_model = None
-filename = "../dronesim/utils/kriging_torque.pkl"
+filename = "../dronesim/utils/kplsk_torque.pkl"
 with open(filename, "rb") as torque:
    torque_model = pickle.load(torque)
 
@@ -1118,7 +1118,7 @@ class BaseAviary(gym.Env):
         if ur == 0:
             alpha = np.sign(wr) * np.pi / 2
         else:
-            alpha = np.arctan(wr / ur)
+            alpha = -np.arctan(wr / ur)
         # compute sideslip angle
         if Va == 0:
             beta = np.sign(vr) * np.pi / 2
@@ -1130,10 +1130,10 @@ class BaseAviary(gym.Env):
         p,q,r = self.ang_v[nth_drone, :]
         drone = self.drones[nth_drone]
 
-        cmd_m1 = cmd[0] * (900) + 100
-        cmd_m2 = cmd[1] * (900) + 100
-        cmd_m3 = cmd[2] * (900) + 100
-        cmd_m4 = cmd[3] * (900) + 100
+        cmd_m1 = cmd[0] * (900) + 200
+        cmd_m2 = cmd[1] * (900) + 200
+        cmd_m3 = cmd[2] * (900) + 200
+        cmd_m4 = cmd[3] * (900) + 200
 
         # small hack to avoid smt to print everything all the time
         sys.stdout = open(os.devnull, 'w')
@@ -1195,6 +1195,7 @@ class BaseAviary(gym.Env):
                     drone.Cn_del_a * cmd_aileron + drone.Cn_del_r * cmd_rudder)
 
         debug_point = 0
+        print(np.degrees(alpha),cmd)
 
         # Apply the forces and moments
         # [0,0,0] - first term positive moves front (in x),second term positive moves left (in the y axis) positive third term is point up
