@@ -1,0 +1,147 @@
+<?xml version="1.0" ?>
+
+<robot name="DarkKnight">
+
+  <material name="white">
+    <color rgba="1. 1. 1. 1.0"/>
+  </material>
+
+  <material name="black">
+    <color rgba="0. 0. 0. 1.0"/>
+  </material>
+
+  <material name="blue0">
+    <color rgba="15./255. 141./255. 238./255. 1.0"/>
+  </material>
+
+  <material name="darkgrey">
+    <color rgba="0.4 0.4 0.4 1.0"/>
+  </material>
+
+  <material name="blue1">
+    <color rgba="0.06 0.46 0.9 0.6"/>
+  </material>
+
+  <material name="orange_red">
+    <color rgba="1 0.25 0 0.4"/>
+  </material>
+
+  <configuration type="fixed_wing"/>
+
+  <properties arm="0.0635" kf="2.0e-8" km="2.74e-10" thrust2weight="2" max_speed_kmh="30" gnd_eff_coeff="11.36859" prop_radius="3.31348e-2" drag_coeff_xy="9.1785e-7" drag_coeff_z="10.311e-7" dw_coeff_1="2267.18" dw_coeff_2=".16" dw_coeff_3="-.11"/>
+
+  <control>
+    <indi actuator_nr="4" output_nr="4" />
+    <indi_1 roll="   0.0   0.0  0.0  0.0" />
+    <indi_2 pitch="  0.0   0.0  0.0  0.0" />
+    <indi_3 yaw="    0.0   0.0  0.0  0.0" />
+    <indi_4 thrust=" 0.1   0.1  0.0 0.0" />
+
+    <indi_guidance_gains>
+      <pos kp="1.0" kd="2.2"/>
+    </indi_guidance_gains>
+    
+    <indi_att_gains>
+      <att  p="3." q="3." r="5." />
+      <rate p="18." q="18." r="10." />
+    </indi_att_gains>
+
+    <pwm>
+      <pwm2rpm scale="20000. 20000. 0. 0." const="0. 0. 0. 0." />
+      <limit min="0  0  -1  -1" max="1  1  1  1" />
+    </pwm>
+  </control>
+
+    <!--CL  CL0="0.31"  CL_alpha="3.15" CL_beta="0."    CL_omega="0.0 4.2 0.0"  CL_ctrl="0.0 0.0 1.2 1.2"/>
+    <CD  CD0="0.02"  CD_k1="0.0"     CD_k2="0.1"                                CD_ctrl="0.0 0.0 0.1 0.1"/>
+    <CY  CY0="0.0"   CY_alpha="0.0"  CY_beta="-0.18" CY_omega="0.19 0.0 0.16"   CY_ctrl="0.0 0.0 0.0 0.0 "/>
+    <Cl  Cl0="0.0"   Cl_alpha="0.0"  Cl_beta="-0.1"  Cl_omega="-0.23 0.0 0.1"   Cl_ctrl="0.0 0.0 0.2 -0.2 "/>
+    <Cm  Cm0="0.007" Cm_alpha="-0.3" Cm_beta="0.0"   Cm_omega="0.0 -1.26 0.0"   Cm_ctrl="0.0 0.0 0.6 0.6 "/>
+    <Cn  Cn0="0.0"   Cn_alpha="0.0"  Cn_beta="0.06"  Cn_omega="-0.04 0.0 -0.08" Cn_ctrl="0.0 0.0 0.0 0.0 "/-->
+
+  <fixed_wing_aero_coeffs>
+    <ref alpha0="0." Sref="0.15"    Bref="1.0" Cref="0.15" Vref="14." actuator_nr="4"/>
+    <CL  CL0="0.0"   CL_alpha="6.15" CL_beta="0."   CL_omega="0.0 4.2 0.0"   CL_ctrl="0.0 0.0 1.2 1.2"/>
+    <CD  CD0="0.02"  CD_k1="0.0"     CD_k2="0.1"                             CD_ctrl="0.0 0.0 0.1 0.1"/>
+    <CY  CY0="0.0"   CY_alpha="0.0"  CY_beta="0.0"  CY_omega="0.0 0.0 0.0"   CY_ctrl="0.0 0.0 0.0 0.0 "/>
+    <Cl  Cl0="0.0"   Cl_alpha="0.0"  Cl_beta="0.0"  Cl_omega="0.0 0.0 0.0"   Cl_ctrl="0.0 0.0 0.0 0.0 "/>
+    <Cm  Cm0="0.0"   Cm_alpha="0.0"  Cm_beta="0.0"  Cm_omega="0.0 -1.26 0.0"   Cm_ctrl="0.0 0.0 0.6 0.6 "/>
+    <Cn  Cn0="0.0"   Cn_alpha="0.0"  Cn_beta="0.0"  Cn_omega="0.0 0.0 0.0"   Cn_ctrl="0.0 0.0 0.0 0.0 "/>
+  </fixed_wing_aero_coeffs>
+
+  <link name="base_link"> 
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.45"/>
+      <inertia ixx="1.2e-3" ixy="0.0" ixz="0.0" iyy="1.2e-3" iyz="0.0" izz="2.1e-3"/>
+    </inertial>
+
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="./darkknight.obj" scale="1. 1. 1."/>
+      </geometry> 
+      <material name="darkgrey"/>
+    </visual>
+
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.15" length=".1"/>
+        <mesh filename="./darkknight.obj" scale="1. 1. 1."/>
+      </geometry>
+    </collision>  
+  </link>
+
+  <link name="prop0_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.07 0.3 0"/>
+      <mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 1.5708 0" xyz="0.07 0.3 0"/>
+      <geometry>
+        <cylinder radius="0.10" length=".001"/>
+      </geometry>
+      <material name="orange_red"/>
+    </visual> 
+  </link>
+  <joint name="prop0_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="prop0_link"/>
+  </joint>
+
+  <link name="prop1_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.07 -0.3 0"/>
+      <mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 1.5708 0" xyz="0.07 -0.3 0"/>
+      <geometry>
+        <cylinder radius="0.10" length=".001"/>
+      </geometry>
+      <material name="orange_red"/>
+    </visual> 
+  </link>
+  <joint name="prop1_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="prop1_link"/>
+  </joint>
+
+  <link name="center_of_mass_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="center_of_mass_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="center_of_mass_link"/>
+  </joint>
+
+</robot>
+

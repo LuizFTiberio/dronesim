@@ -1,0 +1,130 @@
+<?xml version="1.0" ?>
+
+<robot name="VTOL">
+
+  <material name="white">
+    <color rgba="1. 1. 1. 1.0"/>
+  </material>
+
+  <material name="black">
+    <color rgba="0. 0. 0. 1.0"/>
+  </material>
+
+  <material name="blue0">
+    <color rgba="15./255. 141./255. 238./255. 1.0"/>
+  </material>
+
+  <material name="darkgrey">
+    <color rgba="0.4 0.4 0.4 1.0"/>
+  </material>
+
+  <material name="blue1">
+    <color rgba="0.06 0.46 0.9 0.6"/>
+  </material>
+
+  <material name="orange_red">
+    <color rgba="1 0.25 0 0.4"/>
+  </material>
+
+  <configuration type="winged_vtol_physics"/>
+
+
+  <properties arm="0.0635" kf="2.0e-8" km="2.74e-10" thrust2weight="2" max_speed_kmh="30" gnd_eff_coeff="11.36859" prop_radius="3.31348e-2" drag_coeff_xy="9.1785e-7" drag_coeff_z="10.311e-7" dw_coeff_1="2267.18" dw_coeff_2=".16" dw_coeff_3="-.11"/>
+
+  <control>
+    <indi actuator_nr="4" output_nr="4" />
+    <indi_1 roll="   20.  0.0  0.0  0.0" />
+    <indi_2 pitch="  0.0   0.0  -10.   0.0" />
+    <indi_3 yaw="    0.0   20.   0.0    0.0" />
+    <indi_4 thrust=" 0.0   0.0   0.0    25." />
+
+    <indi_guidance_gains>
+      <pos kp="1.8" kd="1.8"/>
+    </indi_guidance_gains>
+    
+    <indi_att_gains>
+      <att  p="3." q="3." r="5." />
+      <rate p="18." q="18." r="10." />
+    </indi_att_gains>
+
+    <pwm>
+      <pwm2rpm scale="0. 0. 0. 0." const="0. 0. 0. 0." />
+      <limit min="-0.5  -0.5  -0.5  0" max="0.5  0.5  0.5  1" />
+    </pwm>
+  </control>
+
+    <aero_coeffs>
+    <ref rho="1.225" alpha0="0.47" Sref="0.55" Bref="2.8956" Cref="0.18994" Vref="14." oswald="0.7" AR="6" M="60" epsilon="0.16" actuator_nr="4"/>
+    <CL  CL = "0.5" CL0="0.23"   CL_alpha="5.61" CL_q="7.95"   CL_del_e="0.13"/>
+    <CD  CD = "0.2" CD0="0.043"  CD_alpha="0.03"  CD_q="0.0" CD_p="0.0" CD_del_e="0.0135"/>
+    <CY  CY0="0.0"   CY_beta="-0.83"  CY_p="0.0" CY_r="0.0"  CY_del_r="0.19" CY_del_a="0.075"/>
+    <Cl  Cl_beta="0.13"  Cl_p="-0.51" Cl_r="0.045" Cl_del_a="0.17" Cl_del_r="0.0024"/>
+    <Cm  Cm0="0.0135" Cm_alpha=" -2.74" Cm_q="-38.21" Cm_del_e="-0.99"/>
+    <Cn  Cn_beta="0.073"  Cn_p="-0.069" Cn_r="-0.095" Cn_del_a="-0.011" Cn_del_r="-0.069"/>
+  </aero_coeffs>
+
+  <motor_coeffs>
+    <Thrust angle_deg = "5" x_pos = "0" y_pos = "0." z_pos = "0."/>
+    <Coeffs C_Q0 = "0.005230" C_Q1 = "0.004970" C_Q2 = "-0.01664" KQ = "0.0658" R_motor = "0.042" i0 = "1.5" KV = "0.0658" C_T0 = "-0.1079" C_T1 = "-0.06044" C_T2 = "0.09357" V_max="44.4" />
+    <Prop D_prop = "0.508"/>
+  </motor_coeffs>
+
+
+  <link name="base_link"> 
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="10.00"/>
+      <inertia ixx="0.8244" ixy="0.0" ixz="0.1204" iyy="1.135" iyz="0.0" izz="1.759"/>
+    </inertial>
+
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="./darkknight.obj" scale="1. 1. 1."/>
+      </geometry> 
+      <material name="darkgrey"/>
+    </visual>
+
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.15" length=".1"/>
+        <mesh filename="./darkknight.obj" scale="1. 1. 1."/>
+      </geometry>
+    </collision>  
+  </link>
+
+  <link name="prop0_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.07 0.3 0"/>
+      <mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 1.5708 0" xyz="0.07 0.3 0"/>
+      <geometry>
+        <cylinder radius="0.10" length=".001"/>
+      </geometry>
+      <material name="orange_red"/>
+    </visual> 
+  </link>
+  <joint name="prop0_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="prop0_link"/>
+  </joint>
+
+
+  <link name="center_of_mass_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+  </link>
+  <joint name="center_of_mass_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="center_of_mass_link"/>
+  </joint>
+
+</robot>
+

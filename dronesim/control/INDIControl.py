@@ -208,12 +208,14 @@ class INDIControl(BaseControl):
         self.integral_pos_e = np.zeros(3)
         self.last_rpy_e = np.zeros(3)
         self.integral_rpy_e = np.zeros(3)
+        self.rpy = np.zeros(3)
 
         self.last_rates = np.zeros(3)  # p,q,r 
         # self.last_pwm = np.ones(self.indi_actuator_nr)*1. # initial pwm
-        self.last_thrust = 0.3
+        self.last_thrust = 0.0
         # self.indi_increment = np.zeros(4)
-        self.cmd = np.ones(self.indi_actuator_nr)*0.5
+        #self.cmd = np.ones(self.indi_actuator_nr)*0.5
+        self.cmd = np.array([0.7,0.7,0.7,0.7]) # by doing that i make sure it starts smooth for fixed wing
         self.last_vel = np.zeros(3)
         self.last_torque = np.zeros(3) # For SU2 controller
 
@@ -356,80 +358,79 @@ class INDIControl(BaseControl):
         debug_log = False
 
         # Linear controller to find the acceleration setpoint from position and velocity
-        # pos_x_err  = guidance_h.ref.pos.x) - stateGetPositionNed_f()->x;
-        # pos_y_err  = guidance_h.ref.pos.y) - stateGetPositionNed_f()->y;
-        # pos_z_err  = guidance_v_z_ref - stateGetPositionNed_i()->z);
         pos_e = target_pos - cur_pos
 
         # Speed setpoint
-        # speed_sp_y = pos_y_err * guidance_indi_pos_gain;
-        # speed_sp_z = pos_z_err * guidance_indi_pos_gain;
         speed_sp = pos_e * self.guidance_indi_pos_gain
 
-        # Not used for the momonet
+        #TODO: I'm forcing target to current to avoid defining the navigation for now!
+        target_vel = cur_vel
         vel_e = speed_sp + target_vel - cur_vel
 
         # Set acceleration setpoint :
-
-        # accel_sp = (speed_sp - cur_vel) * self.guidance_indi_speed_gain
         accel_sp = vel_e * self.guidance_indi_speed_gain
 
-        # Calculate the acceleration via finite difference TODO : this is a rotated sensor output in real life, so ad sensor to the sim ! 
-        cur_accel = (cur_vel - self.last_vel) / control_timestep
-        # print(f'Cur Velocity : {cur_vel[2]}, Last Velocity : {self.last_vel[2]}')
-        self.last_vel = cur_vel
 
+        # Calculate the acceleration via finite difference TODO : this is a rotated sensor output in real life, so add sensor to the sim !
+        if self.control_counter == 1:
+            # lets avoid assuming v(t-1) is zero because it causes explosion in the accel error
+            self.last_vel = cur_vel
+        cur_accel = (cur_vel - self.last_vel) / control_timestep
+        self.last_vel = cur_vel
         accel_e = accel_sp - cur_accel
+        accel_e = np.array([accel_e[0], 0, 0])
 
         # Bound the acceleration error so that the linearization still holds
         accel_e = np.clip(accel_e, -6.0, 6.0) # For Z : -9.0, 9.0 FIX ME !
-        #accel_e = np.clip(accel_e, -2.0, 2.0) # Trying to slow down crazy agility ! Nope it does not work ! Oscillates...
 
         # EULER VERSION
         # # Calculate matrix of partial derivatives
         # guidance_indi_calcG_yxz(&Ga, &eulers_yxz);
         cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
         phi, theta, psi = cur_rpy[0],cur_rpy[1],cur_rpy[2]
+        theta = np.pi/2 - theta
 
-        # print(f'Phi-Theta-Psi : {phi}, {theta}, {psi}')
+        sphi,stheta,spsi = np.sin(phi),np.sin(theta),np.sin(psi)
+        cphi,ctheta,cpsi = np.cos(phi),np.cos(theta),np.cos(psi)
 
-        sph,sth,sps = np.sin(phi),np.sin(theta),np.sin(psi)
-        cph,cth,cps = np.cos(phi),np.cos(theta),np.cos(psi)
+        lift = - np.sin(-theta) * self.GRAVITY
+        T = -np.cos(theta) * self.GRAVITY
 
-        # theta = np.clip(theta,-np.pi,0) # FIX ME
-        lift = np.sin(theta)*-9.81 # FIX ME
-        liftd = 0.
-        T = np.cos(theta)*9.81
-        # get the derivative of the lift wrt to theta
-        # liftd = guidance_indi_get_liftd(stateGetAirspeed_f(), eulers_zxy.theta);
+        min_pitch = -80.0
+        middle_pitch = -50.0
+        max_pitch = -20.0
+        GUIDANCE_INDI_LIFTD_ASQ = 0.20
+        GUIDANCE_INDI_LIFTD_P80 = GUIDANCE_INDI_LIFTD_ASQ * 12**2
+        GUIDANCE_INDI_LIFTD_P50 = GUIDANCE_INDI_LIFTD_P80/2
+        airspeed = np.linalg.norm(cur_vel)
+        pitch_interp = np.clip(np.degrees(theta),min_pitch, max_pitch)
+        if airspeed < 12:
+            if pitch_interp > middle_pitch:
+                ratio = (pitch_interp - max_pitch) / (middle_pitch - max_pitch)
+                liftd = -GUIDANCE_INDI_LIFTD_P50 * ratio
+            else:
+                ratio = (pitch_interp - middle_pitch) / (min_pitch - middle_pitch)
+                liftd = -(GUIDANCE_INDI_LIFTD_P80-GUIDANCE_INDI_LIFTD_P50) * ratio - GUIDANCE_INDI_LIFTD_P50
 
-        T = 9.81 # np.array([0., 0., 1.]) # Thrust guestimation
-
-        # Calculate the matrix of partial derivatives of the roll, pitch and thrust.
-        # w.r.t. the NED accelerations for ZYX eulers
-        # ddx = G*[dtheta,dphi,dT]
-        G = np.array([[(cph*sps-sph*cps*sth)*T , (cph*cps*cth)*T , sph*sps+cph*cps*sth],
-                      [(-sph*sps*sth-cps*cph)*T, (cph*sps*cth)*T , cph*sps*sth-cps*sph],
-                      [-cth*sph*T              , -sth*cph*T      ,     cph*cth        ]  ])
-
-        # Calculate the matrix of partial derivatives of the pitch, roll and thrust.
-        # w.r.t. the NED accelerations for YXZ eulers
-        # ddx = G*[dtheta,dphi,dT]
-        # G = np.array([[cth * cph * T , -sth * sph * T, sth * cph],
-        #             [0.,    -cph * T   ,  -sph ], 
-        #             [-sth * cph * T,   -cth * sph * T  ,  cth * cph] ])
+        else:
+            liftd = -GUIDANCE_INDI_LIFTD_ASQ * airspeed * airspeed
 
         # Matrix of partial derivatives for Lift force
         GUIDANCE_INDI_PITCH_EFF_SCALING = 1.0
 
-        # GL = np.array([[ cph*cth*sps*T + cph*sps*lift , (cth*cps - sph*sth*sps)*T*GUIDANCE_INDI_PITCH_EFF_SCALING + sph*sps*liftd , sth*cps + sph*cth*sps],
-        #                [-cph*cth*cps*T - cph*cps*lift , (cth*sps + sph*sth*cps)*T*GUIDANCE_INDI_PITCH_EFF_SCALING - sph*cps*liftd , sth*sps - sph*cth*cps],
-        #                [    -sph*cth*T -     sph*lift ,                -cph*sth*T*GUIDANCE_INDI_PITCH_EFF_SCALING +     cph*liftd ,        cph*cth       ] ])
+        G_0_0 = cphi * ctheta * spsi * T + cphi * spsi * lift;
+        G_1_0 = -cphi * ctheta * cpsi * T - cphi * cpsi * lift;
+        G_2_0 = -sphi * ctheta * T - sphi * lift;
+        G_0_1 = (ctheta * cpsi - sphi * stheta * spsi) * T * GUIDANCE_INDI_PITCH_EFF_SCALING + sphi * spsi * liftd;
+        G_1_1 = (ctheta * spsi + sphi * stheta * cpsi) * T * GUIDANCE_INDI_PITCH_EFF_SCALING - sphi * cpsi * liftd;
+        G_2_1 = -cphi * stheta * T * GUIDANCE_INDI_PITCH_EFF_SCALING + cphi * liftd;
+        G_0_2 = stheta * cpsi + sphi * ctheta * spsi
+        G_1_2 = stheta * spsi - sphi * ctheta * cpsi
+        G_2_2 = cphi * ctheta
 
-        # GL = np.array([[(cth*cps - sph*sth*sps)*T*GUIDANCE_INDI_PITCH_EFF_SCALING + sph*sps*liftd ,  cph*cth*sps*T + cph*sps*lift , sth*cps + sph*cth*sps],
-        #                [(cth*sps + sph*sth*cps)*T*GUIDANCE_INDI_PITCH_EFF_SCALING - sph*cps*liftd , -cph*cth*cps*T - cph*cps*lift , sth*sps - sph*cth*cps],
-        #                [               -cph*sth*T*GUIDANCE_INDI_PITCH_EFF_SCALING +     cph*liftd ,     -sph*cth*T -     sph*lift ,        cph*cth       ] ])
-
+        G = np.array([[G_0_0, G_0_1, G_0_2],
+                      [G_1_0, G_1_1, G_1_2],
+                      [G_2_0, G_2_1, G_2_2]])
 
         # Invert this matrix
         G_inv = np.linalg.pinv(G) #FIX ME
@@ -437,20 +438,12 @@ class INDIControl(BaseControl):
         # Calculate roll,pitch and thrust command
         control_increment = G_inv.dot(accel_e)
 
-        # Rotate the phi theta : Need to correct this on the upper G ! FIX ME !
-        R_psi = np.array([[np.cos(psi), -np.sin(psi)],
-                          [np.sin(psi),  np.cos(psi)]])
-        control_increment_rotated = R_psi.dot(control_increment[:2])
-        control_increment[:2] = control_increment_rotated
-
         target_quat = np.array([0.0, 0.0, 0.0, 1.0])
-
         yaw_increment = target_rpy[2] - psi #cur_rpy[2]
-        target_euler = cur_rpy + np.array([control_increment[0], control_increment[1], yaw_increment])
+        target_euler = (phi,theta-np.pi/2,psi) + np.array([control_increment[0], control_increment[1], yaw_increment])
+        target_euler = np.array([target_euler[0],0,0])
 
-        thrust = self.last_thrust + control_increment[2] # for EULER version !!!! FIX ME
-        # thrust = self.last_thrust + thrust_increment # for Quaternion version 
-
+        thrust = self.last_thrust + control_increment[2]
 
         return thrust, target_euler, pos_e, target_quat #quat_increment
     
@@ -505,15 +498,6 @@ class INDIControl(BaseControl):
         cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
         phi, theta, psi = cur_rpy[0],cur_rpy[1],cur_rpy[2]
 
-        R_psi = np.array([[np.cos(psi), -np.sin(psi)],
-                          [np.sin(psi),  np.cos(psi)]])
-
-        R_psi = np.linalg.inv(R_psi)
-
-        att_err_rotated = R_psi.dot(att_err[:2])
-        # pdb.set_trace()
-        att_err[:2] = att_err_rotated
-
         # local variable to compute rate setpoints based on attitude error
         rate_sp = Rate()
 
@@ -540,44 +524,21 @@ class INDIControl(BaseControl):
 
         # Calculate the virtual control (reference acceleration) based on a PD controller
         angular_accel_ref = Rate()
-        angular_accel_ref.p = (rate_sp.p - rates_filt.p) * self.indi_gains.rate.p;
-        angular_accel_ref.q = (rate_sp.q - rates_filt.q) * self.indi_gains.rate.q;
-        angular_accel_ref.r = (rate_sp.r - rates_filt.r) * self.indi_gains.rate.r;
+        angular_accel_ref.p = (rate_sp.p - rates_filt.p) * self.indi_gains.rate.p
+        angular_accel_ref.q = (rate_sp.q - rates_filt.q) * self.indi_gains.rate.q
+        angular_accel_ref.r = (rate_sp.r - rates_filt.r) * self.indi_gains.rate.r
 
         indi_v = np.zeros(4) # roll-pitch-yaw-thrust
         indi_v[0] = angular_accel_ref.p - angular_accel[0]
         indi_v[1] = angular_accel_ref.q - angular_accel[1] 
-        indi_v[2] = angular_accel_ref.r - angular_accel[2] 
+        indi_v[2] = angular_accel_ref.r - angular_accel[2]
         indi_v[3] = thrust - self.last_thrust #* 0.
         self.last_thrust = thrust
 
-        pseudo_inv = 1
-        if pseudo_inv :
-            indi_du = np.dot(np.linalg.pinv(self.G1/0.05),indi_v)#*self.m
-            # print(f'Command : {self.cmd}')
-            # pdb.set_trace()
-        else: 
-            # Use Active set for control allocation
-            umin = np.asarray([self.MIN_PWM[i] - self.cmd[i] for i in range(self.indi_actuator_nr)])
-            umax = np.asarray([self.MAX_PWM[i] - self.cmd[i] for i in range(self.indi_actuator_nr)])
-            # umax = np.asarray([self.MAX_PWM for i in range(4)])
-            # indi_v1 = [indi_v[i] for i in range(4)]
-
-            # up = np.array([0., 0., 0., 0.])
-            Wv = np.array([1000, 1000, 0.1, 10])
-            Wu = np.ones(self.indi_actuator_nr) #np.array([1, 1, 1, 1, 1, 1]) #FIXME
-            u_guess = None
-            W_init  = None
-            up = None
-
-            # import scipy.optimize
-            # res = scipy.optimize.lsq_linear(A, v, bounds=(umin, umax), lsmr_tol='auto', verbose=1)
-            indi_du, nit = wls_alloc(indi_v, umin, umax, self.G1/0.05, u_guess, W_init, Wv, Wu, up)
-
+        indi_du = np.dot(np.linalg.pinv(self.G1),indi_v)
         self.cmd += indi_du
         self.cmd = np.clip(self.cmd, self.MIN_PWM, self.MAX_PWM) # command in PWM
 
-        # print(f'CMD : {self.cmd}  ---  RPM : {self.rpm_of_pwm(self.cmd)}')
         return self.cmd #self.rpm_of_pwm(self.cmd)
     
     ################################################################################

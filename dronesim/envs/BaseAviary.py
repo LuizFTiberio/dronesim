@@ -6,16 +6,25 @@ from datetime import datetime
 from enum import Enum
 import xml.etree.ElementTree as etxml
 from PIL import Image
-# import pkgutil
-# egl = pkgutil.get_loader('eglRenderer')
 import numpy as np
-import pybullet as p
+import pybullet as pyb
 import pybullet_data
 import gym
+import pickle
+import sys
 
 # For advanced propeller model based on database
 from dronesim.utils.utils import calculate_propeller_forces_moments
 from dronesim.database.propeller_database import *
+
+filename = "../dronesim/utils/kriging_thrust.pkl"
+with open(filename, "rb") as thrust:
+   thrust_model = pickle.load(thrust)
+
+torque_model = None
+filename = "../dronesim/utils/kriging_torque.pkl"
+with open(filename, "rb") as torque:
+   torque_model = pickle.load(torque)
 
 # for fixed-wing vehicle's physics
 from dronesim.utils.utils import R_aero_to_body
@@ -208,6 +217,8 @@ class BaseAviary(gym.Env):
         for drone, urdf in zip(self.drones, self.URDF):
             if 'fixed_wing' in drone.TYPE:
                 self._parseURDFFixedwingParameters(drone, urdf)
+            if 'winged_vtol_physics' in drone.TYPE:
+                self._parseURDFVTOLParameters(drone, urdf)
 
         #### Compute constants #####################################
 #        self.GRAVITY = self.G*self.M
@@ -247,27 +258,27 @@ class BaseAviary(gym.Env):
         #### Connect to PyBullet ###################################
         if self.GUI:
             #### With debug GUI ########################################
-            self.CLIENT = p.connect(p.GUI) # p.connect(p.GUI, options="--opengl2")
-            for i in [p.COV_ENABLE_RGB_BUFFER_PREVIEW, p.COV_ENABLE_DEPTH_BUFFER_PREVIEW, p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW]:
-                p.configureDebugVisualizer(i, 0, physicsClientId=self.CLIENT)
-            p.resetDebugVisualizerCamera(cameraDistance=6,
+            self.CLIENT = pyb.connect(pyb.GUI) # p.connect(p.GUI, options="--opengl2")
+            for i in [pyb.COV_ENABLE_RGB_BUFFER_PREVIEW, pyb.COV_ENABLE_DEPTH_BUFFER_PREVIEW, pyb.COV_ENABLE_SEGMENTATION_MARK_PREVIEW]:
+                pyb.configureDebugVisualizer(i, 0, physicsClientId=self.CLIENT)
+            pyb.resetDebugVisualizerCamera(cameraDistance=6,
                                          cameraYaw=-30,
                                          cameraPitch=-30,
                                          cameraTargetPosition=[0, 0, 0],
                                          physicsClientId=self.CLIENT
                                          )
-            ret = p.getDebugVisualizerCamera(physicsClientId=self.CLIENT)
+            ret = pyb.getDebugVisualizerCamera(physicsClientId=self.CLIENT)
             print("viewMatrix", ret[2])
             print("projectionMatrix", ret[3])
             if self.USER_DEBUG:
                 #### Add input sliders to the GUI ##########################
                 self.SLIDERS = -1*np.ones(4)
                 for i in range(4):
-                    self.SLIDERS[i] = p.addUserDebugParameter("Propeller "+str(i)+" RPM", 0, self.MAX_RPM, self.HOVER_RPM, physicsClientId=self.CLIENT)
-                self.INPUT_SWITCH = p.addUserDebugParameter("Use GUI RPM", 9999, -1, 0, physicsClientId=self.CLIENT)
+                    self.SLIDERS[i] = pyb.addUserDebugParameter("Propeller "+str(i)+" RPM", 0, self.MAX_RPM, self.HOVER_RPM, physicsClientId=self.CLIENT)
+                self.INPUT_SWITCH = pyb.addUserDebugParameter("Use GUI RPM", 9999, -1, 0, physicsClientId=self.CLIENT)
         else:
             #### Without debug GUI #####################################
-            self.CLIENT = p.connect(p.DIRECT)
+            self.CLIENT = pyb.connect(p.DIRECT)
             #### Uncomment the following line to use EGL Render Plugin #
             #### Instead of TinyRender (CPU-based) in PYB's Direct mode
             # if platform == "linux": p.setAdditionalSearchPath(pybullet_data.getDataPath()); plugin = p.loadPlugin(egl.get_filename(), "_eglRendererPlugin"); print("plugin=", plugin)
@@ -277,7 +288,7 @@ class BaseAviary(gym.Env):
                 self.VID_HEIGHT=int(480)
                 self.FRAME_PER_SEC = 24
                 self.CAPTURE_FREQ = int(self.SIM_FREQ/self.FRAME_PER_SEC)
-                self.CAM_VIEW = p.computeViewMatrixFromYawPitchRoll(distance=3,
+                self.CAM_VIEW = pyb.computeViewMatrixFromYawPitchRoll(distance=3,
                                                                     yaw=-30,
                                                                     pitch=-30,
                                                                     roll=0,
@@ -285,7 +296,7 @@ class BaseAviary(gym.Env):
                                                                     upAxisIndex=2,
                                                                     physicsClientId=self.CLIENT
                                                                     )
-                self.CAM_PRO = p.computeProjectionMatrixFOV(fov=60.0,
+                self.CAM_PRO = pyb.computeProjectionMatrixFOV(fov=60.0,
                                                             aspect=self.VID_WIDTH/self.VID_HEIGHT,
                                                             nearVal=0.1,
                                                             farVal=1000.0
@@ -333,7 +344,7 @@ class BaseAviary(gym.Env):
             in each subclass for its format.
 
         """
-        p.resetSimulation(physicsClientId=self.CLIENT)
+        pyb.resetSimulation(physicsClientId=self.CLIENT)
         #### Housekeeping ##########################################
         self._housekeeping()
         #### Update and store the drones kinematic information #####
@@ -374,13 +385,13 @@ class BaseAviary(gym.Env):
         """
         #### Save PNG video frames if RECORD=True and GUI=False ####
         if self.RECORD and not self.GUI and self.step_counter%self.CAPTURE_FREQ == 0:
-            [w, h, rgb, dep, seg] = p.getCameraImage(width=self.VID_WIDTH,
+            [w, h, rgb, dep, seg] = pyb.getCameraImage(width=self.VID_WIDTH,
                                                      height=self.VID_HEIGHT,
                                                      shadow=1,
                                                      viewMatrix=self.CAM_VIEW,
                                                      projectionMatrix=self.CAM_PRO,
-                                                     renderer=p.ER_TINY_RENDERER,
-                                                     flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
+                                                     renderer=pyb.ER_TINY_RENDERER,
+                                                     flags=pyb.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
                                                      physicsClientId=self.CLIENT
                                                      )
             (Image.fromarray(np.reshape(rgb, (h, w, 4)), 'RGBA')).save(self.IMG_PATH+"frame_"+str(self.FRAME_NUM)+".png")
@@ -392,16 +403,16 @@ class BaseAviary(gym.Env):
             self.FRAME_NUM += 1
         #### Read the GUI's input parameters #######################
         if self.GUI and self.USER_DEBUG:
-            current_input_switch = p.readUserDebugParameter(self.INPUT_SWITCH, physicsClientId=self.CLIENT)
+            current_input_switch = pyb.readUserDebugParameter(self.INPUT_SWITCH, physicsClientId=self.CLIENT)
             if current_input_switch > self.last_input_switch:
                 self.last_input_switch = current_input_switch
                 self.USE_GUI_RPM = True if self.USE_GUI_RPM == False else False
         if self.USE_GUI_RPM:
             for i in range(4):
-                self.gui_input[i] = p.readUserDebugParameter(int(self.SLIDERS[i]), physicsClientId=self.CLIENT)
+                self.gui_input[i] = pyb.readUserDebugParameter(int(self.SLIDERS[i]), physicsClientId=self.CLIENT)
             clipped_action = np.tile(self.gui_input, (self.NUM_DRONES, 1))
             if self.step_counter%(self.SIM_FREQ/2) == 0:
-                self.GUI_INPUT_TEXT = [p.addUserDebugText("Using GUI RPM",
+                self.GUI_INPUT_TEXT = [pyb.addUserDebugText("Using GUI RPM",
                                                           textPosition=[0, 0, 0],
                                                           textColorRGB=[1, 0, 0],
                                                           lifeTime=1,
@@ -445,7 +456,7 @@ class BaseAviary(gym.Env):
                     self._downwash(i)
             #### PyBullet computes the new state, unless Physics.DYN ###
             if self.PHYSICS != Physics.DYN:
-                p.stepSimulation(physicsClientId=self.CLIENT)
+                pyb.stepSimulation(physicsClientId=self.CLIENT)
             #### Save the last applied action (e.g. to compute drag) ###
             self.last_clipped_action = clipped_action
         #### Update and store the drones kinematic information #####
@@ -475,7 +486,7 @@ class BaseAviary(gym.Env):
             Unused.
 
         """
-        # self.CLIENT = p.connect(p.GUI)
+        # self.CLIENT = pyb.connect(pyb.GUI)
         if self.first_render_call and not self.GUI:
             print("[WARNING] BaseAviary.render() is implemented as text-only, re-initialize the environment using Aviary(gui=True) to use PyBullet's graphical interface")
             self.first_render_call = False
@@ -495,8 +506,8 @@ class BaseAviary(gym.Env):
         """Terminates the environment.
         """
         if self.RECORD and self.GUI:
-            p.stopStateLogging(self.VIDEO_ID, physicsClientId=self.CLIENT)
-        p.disconnect(physicsClientId=self.CLIENT)
+            pyb.stopStateLogging(self.VIDEO_ID, physicsClientId=self.CLIENT)
+        pyb.disconnect(physicsClientId=self.CLIENT)
     
     ################################################################################
 
@@ -556,30 +567,30 @@ class BaseAviary(gym.Env):
         if self.PHYSICS == Physics.DYN:
             self.rpy_rates = np.zeros((self.NUM_DRONES, 3))
         #### Set PyBullet's parameters #############################
-        p.setGravity(0, 0, -self.G, physicsClientId=self.CLIENT)
-        p.setRealTimeSimulation(0, physicsClientId=self.CLIENT)
-        p.setTimeStep(self.TIMESTEP, physicsClientId=self.CLIENT)
-        p.setAdditionalSearchPath(pybullet_data.getDataPath(), physicsClientId=self.CLIENT)
+        pyb.setGravity(0, 0, -self.G, physicsClientId=self.CLIENT)
+        pyb.setRealTimeSimulation(0, physicsClientId=self.CLIENT)
+        pyb.setTimeStep(self.TIMESTEP, physicsClientId=self.CLIENT)
+        pyb.setAdditionalSearchPath(pybullet_data.getDataPath(), physicsClientId=self.CLIENT)
         #### Load ground plane, drone and obstacles models #########
-        self.PLANE_ID = p.loadURDF("plane.urdf", physicsClientId=self.CLIENT)
-        self.DRONE_IDS = np.array([p.loadURDF(os.path.dirname(os.path.abspath(__file__))+"/../assets/"+self.URDF[i],
+        self.PLANE_ID = pyb.loadURDF("plane.urdf", physicsClientId=self.CLIENT)
+        self.DRONE_IDS = np.array([pyb.loadURDF(os.path.dirname(os.path.abspath(__file__))+"/../assets/"+self.URDF[i],
                                               self.INIT_XYZS[i,:],
-                                              p.getQuaternionFromEuler(self.INIT_RPYS[i,:]),
-                                              flags = p.URDF_USE_INERTIA_FROM_FILE,
+                                              pyb.getQuaternionFromEuler(self.INIT_RPYS[i,:]),
+                                              flags = pyb.URDF_USE_INERTIA_FROM_FILE,
                                               physicsClientId=self.CLIENT
                                               ) for i in range(self.NUM_DRONES)])
         for i in range(self.NUM_DRONES):
             #### If the vehicle initialized with flight velocity : e.g. Fixed-wing configuration
             if self.INIT_VELS is not None:
                 if self.INIT_VELS[i] is not None: # FIXME Ugly :( use something else ? instance
-                    p.resetBaseVelocity(self.DRONE_IDS[i], linearVelocity= self.INIT_VELS[i], physicsClientId=self.CLIENT)
+                    pyb.resetBaseVelocity(self.DRONE_IDS[i], linearVelocity= self.INIT_VELS[i], physicsClientId=self.CLIENT)
             #### Show the frame of reference of the drone, note that ###
             #### It severly slows down the GUI #########################
             if self.GUI and self.USER_DEBUG:
                 self._showDroneLocalAxes(i)
             #### Disable collisions between drones' and the ground plane
             #### E.g., to start a drone at [0,0,0] #####################
-            # p.setCollisionFilterPair(bodyUniqueIdA=self.PLANE_ID, bodyUniqueIdB=self.DRONE_IDS[i], linkIndexA=-1, linkIndexB=-1, enableCollision=0, physicsClientId=self.CLIENT)
+            # pyb.setCollisionFilterPair(bodyUniqueIdA=self.PLANE_ID, bodyUniqueIdB=self.DRONE_IDS[i], linkIndexA=-1, linkIndexB=-1, enableCollision=0, physicsClientId=self.CLIENT)
         if self.OBSTACLES:
             self._addObstacles()
     
@@ -593,9 +604,9 @@ class BaseAviary(gym.Env):
 
         """
         for i in range (self.NUM_DRONES):
-            self.pos[i], self.quat[i] = p.getBasePositionAndOrientation(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
-            self.rpy[i] = p.getEulerFromQuaternion(self.quat[i])
-            self.vel[i], self.ang_v[i] = p.getBaseVelocity(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
+            self.pos[i], self.quat[i] = pyb.getBasePositionAndOrientation(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
+            self.rpy[i] = pyb.getEulerFromQuaternion(self.quat[i])
+            self.vel[i], self.ang_v[i] = pyb.getBaseVelocity(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
     
     ################################################################################
 
@@ -607,7 +618,7 @@ class BaseAviary(gym.Env):
 
         """
         if self.RECORD and self.GUI:
-            self.VIDEO_ID = p.startStateLogging(loggingType=p.STATE_LOGGING_VIDEO_MP4,
+            self.VIDEO_ID = pyb.startStateLogging(loggingType=pyb.STATE_LOGGING_VIDEO_MP4,
                                                 fileName=os.path.dirname(os.path.abspath(__file__))+"/../../files/videos/video-"+datetime.now().strftime("%m.%d.%Y_%H.%M.%S")+".mp4",
                                                 physicsClientId=self.CLIENT
                                                 )
@@ -669,21 +680,21 @@ class BaseAviary(gym.Env):
         if self.IMG_RES is None:
             print("[ERROR] in BaseAviary._getDroneImages(), remember to set self.IMG_RES to np.array([width, height])")
             exit()
-        rot_mat = np.array(p.getMatrixFromQuaternion(self.quat[nth_drone, :])).reshape(3, 3)
+        rot_mat = np.array(pyb.getMatrixFromQuaternion(self.quat[nth_drone, :])).reshape(3, 3)
         #### Set target point, camera view and projection matrices #
         target = np.dot(rot_mat,np.array([1000, 0, 0])) + np.array(self.pos[nth_drone, :])
-        DRONE_CAM_VIEW = p.computeViewMatrix(cameraEyePosition=self.pos[nth_drone, :]+np.array([0, 0, self.L]),
+        DRONE_CAM_VIEW = pyb.computeViewMatrix(cameraEyePosition=self.pos[nth_drone, :]+np.array([0, 0, self.L]),
                                              cameraTargetPosition=target,
                                              cameraUpVector=[0, 0, 1],
                                              physicsClientId=self.CLIENT
                                              )
-        DRONE_CAM_PRO =  p.computeProjectionMatrixFOV(fov=60.0,
+        DRONE_CAM_PRO =  pyb.computeProjectionMatrixFOV(fov=60.0,
                                                       aspect=1.0,
                                                       nearVal=self.L,
                                                       farVal=1000.0
                                                       )
-        SEG_FLAG = p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX if segmentation else p.ER_NO_SEGMENTATION_MASK
-        [w, h, rgb, dep, seg] = p.getCameraImage(width=self.IMG_RES[0],
+        SEG_FLAG = pyb.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX if segmentation else pyb.ER_NO_SEGMENTATION_MASK
+        [w, h, rgb, dep, seg] = pyb.getCameraImage(width=self.IMG_RES[0],
                                                  height=self.IMG_RES[1],
                                                  shadow=1,
                                                  viewMatrix=DRONE_CAM_VIEW,
@@ -779,6 +790,8 @@ class BaseAviary(gym.Env):
             self._tail_sitter_physics(cmd,nth_drone)
         elif 'coaxial_birotor' in self.drones[nth_drone].TYPE:
             self._coaxial_birotor_physics(cmd,nth_drone)
+        elif 'winged_vtol_physics' in self.drones[nth_drone].TYPE:
+            self._winged_vtol_physics(cmd,nth_drone)
         else:
             rpm = self.drones[nth_drone].PWM2RPM_SCALE * cmd + self.drones[nth_drone].PWM2RPM_CONST
             # rpm = 20000.*cmd
@@ -786,17 +799,17 @@ class BaseAviary(gym.Env):
             torques = np.array(rpm**2)*self.drones[nth_drone].KM
             z_torque = (-torques[0] + torques[1] - torques[2] + torques[3])
             for i in range(4):
-                p.applyExternalForce(self.DRONE_IDS[nth_drone],
+                pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                      i,
                                      forceObj=[0, 0, forces[i]],
                                      posObj=[0, 0, 0],
-                                     flags=p.LINK_FRAME,
+                                     flags=pyb.LINK_FRAME,
                                      physicsClientId=self.CLIENT
                                      )
-            p.applyExternalTorque(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
                                   4, # FIX ME This should be -1 to define the body, here it only works as there is an additional link called center of mass in the URDF file! will not work for tohers !
                                   torqueObj=[0, 0, z_torque],
-                                  flags=p.LINK_FRAME,
+                                  flags=pyb.LINK_FRAME,
                                   physicsClientId=self.CLIENT
                                   )
 
@@ -816,7 +829,7 @@ class BaseAviary(gym.Env):
         rvel = self.ang_v[nth_drone,:]
 
         # Rotate inertial velocity to body frame
-        R = np.array(p.getMatrixFromQuaternion(quat)).reshape(3, 3)
+        R = np.array(pyb.getMatrixFromQuaternion(quat)).reshape(3, 3)
         vel_b = R.T.dot(vel)
         rvel_b = R.T.dot(rvel)
         gamma = np.arcsin(vel[2]/np.linalg.norm(vel))
@@ -872,26 +885,26 @@ class BaseAviary(gym.Env):
         print(F_aero_body, M_aero_body)
         print(f'Airspeed :{V_air:.2f}, VX : {vel[0]:.2f}, VZ : {vel[2]:.2f}, Alpha : {alpha:.3f}, Beta : {beta:.3f} Gamma : {gamma:.3f} Prop Foce : {prop_force[0]:.2f} , {prop_force[1]:.2f}')
 
-        p.applyExternalForce(self.DRONE_IDS[nth_drone],
+        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                             -1, # to base link : fuselage
                             forceObj=[F_aero_body[0],F_aero_body[1],F_aero_body[2]],
                             posObj=[0, 0, 0],
-                            flags=p.LINK_FRAME,
+                            flags=pyb.LINK_FRAME,
                             physicsClientId=self.CLIENT
                             )
         for i in range(2):
-            p.applyExternalForce(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                             i, # to propeller axis
                             forceObj=[prop_force[i],0,0],
                             posObj=[0, 0, 0],
-                            flags=p.LINK_FRAME,
+                            flags=pyb.LINK_FRAME,
                             physicsClientId=self.CLIENT
                             )
 
-        p.applyExternalTorque(self.DRONE_IDS[nth_drone],
+        pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
                             2, # to center of mass - Check this for different configurations - Will not work generically :(
                             torqueObj=[M_aero_body[0],M_aero_body[1],M_aero_body[2]],
-                            flags=p.LINK_FRAME,  # FIX ME : see https://github.com/bulletphysics/bullet3/issues/1949 
+                            flags=pyb.LINK_FRAME,  # FIX ME : see https://github.com/bulletphysics/bullet3/issues/1949
                             physicsClientId=self.CLIENT
                             )
 
@@ -992,7 +1005,7 @@ class BaseAviary(gym.Env):
         rvel = self.ang_v[nth_drone,:]
 
         # Rotate inertial velocity to body frame
-        R = np.array(p.getMatrixFromQuaternion(quat)).reshape(3, 3)
+        R = np.array(pyb.getMatrixFromQuaternion(quat)).reshape(3, 3)
         vel_b = R.T.dot(vl)
         wb = R.T.dot(rvel)
         # gamma = np.arcsin(vel[2]/np.linalg.norm(vel))
@@ -1033,11 +1046,11 @@ class BaseAviary(gym.Env):
         # Apply propeller thrust : specific to this vehicle at 0 and 1 for left and right prop.
 
         for i in range(2):
-            p.applyExternalForce(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                              i,
                              forceObj=[0.,0.,prop_force[i]],
                              posObj=[0, 0, 0],
-                             flags=p.LINK_FRAME,
+                             flags=pyb.LINK_FRAME,
                              physicsClientId=self.CLIENT
                              )
 
@@ -1060,17 +1073,17 @@ class BaseAviary(gym.Env):
             print(f' {i}- Fb : {Fb} Mb : {Mb} CMD : {cmd}')
 
             # Directly apply force and moments to each wing links (left and right)
-            p.applyExternalForce(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                 i,
                                 forceObj=[Fb[2], 0., 0.], #[Fb[2],-Fb[1],Fb[0]],# [0., 0., 0.],#
                                 posObj=[0, 0, 0],
-                                flags=p.LINK_FRAME,
+                                flags=pyb.LINK_FRAME,
                                 physicsClientId=self.CLIENT
                                 )
-            p.applyExternalTorque(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
                                 i, # to base link : fuselage
                                 torqueObj=[0., -Mb[1], 0.],#[M[0],M[1],M[2]],
-                                flags=p.LINK_FRAME, #FIX ME FIXME
+                                flags=pyb.LINK_FRAME, #FIX ME FIXME
                                 physicsClientId=self.CLIENT
                                 )
             i+=1
@@ -1079,6 +1092,196 @@ class BaseAviary(gym.Env):
         # return [Fb, Mb]
 
     ################################################################################
+
+    def _winged_vtol_physics(self,
+                            cmd,
+                            nth_drone
+                            ):
+        '''
+        VTOL flight dynamics based on  the models by Randy Beard and Tim McLain
+        https://github.com/randybeard/uavbook
+        We begin by taking states, and then calculate the forces and moments
+        '''
+
+        # calculate atm data - no wind for starters
+        quaternion = self.quat[nth_drone, :]
+        u,v,w = self.vel[nth_drone, :]
+        R_vb = np.array(pyb.getMatrixFromQuaternion(quaternion)).reshape(3, 3)
+        wind_body_frame = np.array([0,0,0]) #TODO
+        v_air = np.array([u, v, w])
+        ur = v_air[0] - wind_body_frame[0]
+        vr = v_air[1] - wind_body_frame[1]
+        wr = v_air[2] - wind_body_frame[2]
+        # compute airspeed
+        Va = np.sqrt(ur ** 2 + vr ** 2 + wr ** 2)
+        # compute angle of attack
+        if ur == 0:
+            alpha = np.sign(wr) * np.pi / 2
+        else:
+            alpha = np.arctan(wr / ur)
+        # compute sideslip angle
+        if Va == 0:
+            beta = np.sign(vr) * np.pi / 2
+        else:
+            beta = np.arcsin(vr / np.sqrt(ur ** 2 + vr ** 2 + wr ** 2))
+
+        # calculate forces and moments - some transformations
+        phi, theta, psi = self.rpy[nth_drone, :]
+        p,q,r = self.ang_v[nth_drone, :]
+        drone = self.drones[nth_drone]
+
+        cmd_m1 = cmd[0] * (900) + 100
+        cmd_m2 = cmd[1] * (900) + 100
+        cmd_m3 = cmd[2] * (900) + 100
+        cmd_m4 = cmd[3] * (900) + 100
+
+        # small hack to avoid smt to print everything all the time
+        sys.stdout = open(os.devnull, 'w')
+
+        T1 = thrust_model.predict_values(np.array([Va, cmd_m1, alpha]).reshape((-1,3)))[0][0]
+        Q1 = torque_model.predict_values(np.array([Va, cmd_m1, alpha]).reshape((-1,3)))[0][0]
+        T2 = thrust_model.predict_values(np.array([Va, cmd_m2, alpha]).reshape((-1,3)))[0][0]
+        Q2 = torque_model.predict_values(np.array([Va, cmd_m2, alpha]).reshape((-1,3)))[0][0]
+        T3 = thrust_model.predict_values(np.array([Va, cmd_m3, alpha]).reshape((-1,3)))[0][0]
+        Q3 = torque_model.predict_values(np.array([Va, cmd_m3, alpha]).reshape((-1,3)))[0][0]
+        T4 = thrust_model.predict_values(np.array([Va, cmd_m4, alpha]).reshape((-1,3)))[0][0]
+        Q4 = torque_model.predict_values(np.array([Va, cmd_m4, alpha]).reshape((-1,3)))[0][0]
+
+        # reverting the small hack
+        sys.stdout = sys.__stdout__
+
+        # retrieve the commands
+        cmd_elevator = 0
+        cmd_aileron = 0
+        cmd_rudder = 0
+
+        # calculate forces and moments - aero
+        n_sigma = np.exp(-drone.M * (alpha - drone.alpha0))
+        p_sigma = np.exp(drone.M * (alpha + drone.alpha0))
+        sigma = (1 + p_sigma + n_sigma) / ((1 + n_sigma) * (1 + p_sigma))
+
+        CL_a = (1 - sigma) * (drone.CL0 + drone.CL_alpha * alpha) + \
+               sigma * (2 * np.sign(alpha) * np.sin(alpha) ** 2 * np.cos(alpha))
+        CD_a = drone.CD0 + (drone.CL0 + drone.CL_alpha * alpha) ** 2 / (np.pi * drone.oswald * drone.AR)
+
+        CL = (-CD_a * np.sin(alpha) - CL_a * np.cos(alpha)) + \
+             ((-drone.CD_q * np.sin(alpha) - drone.CL_q * np.cos(alpha)) * drone.Cref * q / (2 * Va)) + \
+             ((-drone.CD_del_e * np.sin(alpha) - drone.CL_del_e * np.cos(alpha)) * cmd_elevator)
+        CD = (-CD_a * np.cos(alpha) + CL_a * np.sin(alpha)) + \
+             ((-drone.CD_q * np.cos(alpha) + drone.CL_q * np.sin(alpha)) * drone.Cref * q / (2 * Va)) + \
+             ((-drone.CD_del_e * np.cos(alpha) + drone.CL_del_e * np.sin(alpha)) * cmd_elevator)
+
+        # compute Lift and Drag Forces
+        F_lift = .5 * drone.rho * drone.Sref * Va ** 2 * CL
+        F_drag = .5 * drone.rho * drone.Sref * Va ** 2 * CD
+
+        Fy = .5 * drone.rho * drone.Sref * Va ** 2 * (
+                    drone.CY_beta * beta + drone.CY_p * p * drone.Bref / (2 * Va) +
+                            drone.CY_r * r * drone.Bref / (2 * Va) +
+                    drone.CY_del_a * cmd_aileron + drone.CY_del_r * cmd_rudder)
+
+        My = .5 * drone.rho * drone.Sref * Va ** 2 * drone.Cref * \
+                    (drone.Cm0 + drone.Cm_alpha * alpha + drone.Cm_q * q *drone.Cref / (2 * Va)
+                     + drone.Cm_del_e * cmd_elevator)
+
+        Mx = .5 * drone.rho * drone.Sref * Va ** 2 * drone.Bref * (
+                    drone.Cl_beta * beta + drone.Cl_p * p * drone.Bref / (2 * Va) +
+                    drone.Cl_r * r * drone.Bref / (2 * Va) +
+                    drone.Cl_del_a * cmd_aileron + drone.Cl_del_r * cmd_rudder)
+
+        Mz = 0.5 * drone.rho * drone.Sref * Va ** 2 * drone.Bref * (
+                    drone.Cn_beta * beta + drone.Cn_p * p * drone.Bref / (2 * Va) +
+                    drone.Cn_r * r * drone.Bref / (2 * Va) +
+                    drone.Cn_del_a * cmd_aileron + drone.Cn_del_r * cmd_rudder)
+
+        debug_point = 0
+
+        # Apply the forces and moments
+        # [0,0,0] - first term positive moves front (in x),second term positive moves left (in the y axis) positive third term is point up
+        #AERO FORCES
+        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
+                               -1,
+                               forceObj=[F_drag, Fy, -F_lift],
+                               posObj=[0, 0, 0],
+                               flags=pyb.LINK_FRAME,
+                               physicsClientId=self.CLIENT
+                               )
+
+        # AERO MOMENTS
+        pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
+                                -1,
+                                torqueObj=[-Mx,My,-Mz],
+                                flags=pyb.LINK_FRAME,
+                                physicsClientId=self.CLIENT
+                                )
+
+        # Prop1 FORCES
+        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
+                               1,
+                               forceObj=[T1*np.cos(np.degrees(drone.angle_deg)), 0., -T1*np.sin(np.degrees(drone.angle_deg))],
+                               posObj=[0, 0, 0],
+                               flags=pyb.LINK_FRAME,
+                               physicsClientId=self.CLIENT
+                               )
+
+        # Prop1 MOMENTS
+        pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
+                                1,
+                                torqueObj=[Q1,0,0],
+                                flags=pyb.LINK_FRAME,
+                                physicsClientId=self.CLIENT
+                                )
+
+        # Prop2 FORCES
+        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
+                               2,
+                               forceObj=[T2*np.cos(np.degrees(drone.angle_deg)), 0., -T2*np.sin(np.degrees(drone.angle_deg))],
+                               posObj=[0, 0, 0],
+                               flags=pyb.LINK_FRAME,
+                               physicsClientId=self.CLIENT
+                               )
+
+        # Prop2 MOMENTS
+        pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
+                                2,
+                                torqueObj=[-Q2, 0, 0],
+                                flags=pyb.LINK_FRAME,
+                                physicsClientId=self.CLIENT
+                                )
+
+        # Prop3 FORCES
+        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
+                               3,
+                               forceObj=[T3*np.cos(np.degrees(drone.angle_deg)), 0., -T3*np.sin(np.degrees(drone.angle_deg))],
+                               posObj=[0, 0, 0],
+                               flags=pyb.LINK_FRAME,
+                               physicsClientId=self.CLIENT
+                               )
+
+        # Prop3 MOMENTS
+        pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
+                                3,
+                                torqueObj=[-Q3, 0, 0],
+                                flags=pyb.LINK_FRAME,
+                                physicsClientId=self.CLIENT
+                                )
+
+        # Prop4 FORCES
+        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
+                               4,
+                               forceObj=[T4*np.cos(np.degrees(drone.angle_deg)), 0., T4*np.sin(np.degrees(drone.angle_deg))],
+                               posObj=[0, 0, 0],
+                               flags=pyb.LINK_FRAME,
+                               physicsClientId=self.CLIENT
+                               )
+
+        # Prop4 MOMENTS
+        pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
+                                4,
+                                torqueObj=[Q4, 0, 0],
+                                flags=pyb.LINK_FRAME,
+                                physicsClientId=self.CLIENT
+                                )
 
     def _coaxial_birotor_physics(self,
                  cmd,
@@ -1093,24 +1296,24 @@ class BaseAviary(gym.Env):
         i=0
         for _cmd in cmd[2:]:
             deflection = _cmd*np.deg2rad(10.) # cmd is in -1/+1 for radians
-            p.resetJointState(nth_drone+1, i, deflection)
+            pyb.resetJointState(nth_drone+1, i, deflection)
             # print(f' {i}- deflection : {deflection}')
             i +=1
 
         s=[-1, 1]
         for i in range(2):
-            p.applyExternalForce(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                  i+1,
                                  forceObj=[0., 0., forces[i]],
                                  posObj=[0, 0, 0],
-                                 flags=p.LINK_FRAME,
+                                 flags=pyb.LINK_FRAME,
                                  physicsClientId=self.CLIENT
                                  )
 
-            p.applyExternalTorque(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
                                   i+1, # to base link : fuselage
                                   torqueObj=[0., 0., s[i]*torques[i]],
-                                  flags=p.LINK_FRAME, #FIX ME FIXME
+                                  flags=pyb.LINK_FRAME, #FIX ME FIXME
                                   physicsClientId=self.CLIENT
                                   )
 
@@ -1145,17 +1348,17 @@ class BaseAviary(gym.Env):
             torques[i] *= -1.
 
         for i, j in zip(range(1,12,2),range(6)):
-            p.applyExternalForce(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                  i,
                                  forceObj= [0., 0., forces[j]],# [f_noise[0], f_noise[1], forces[j]],
                                  posObj=[0, 0, 0],
-                                 flags=p.LINK_FRAME,
+                                 flags=pyb.LINK_FRAME,
                                  physicsClientId=self.CLIENT
                                  )
-            p.applyExternalTorque(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
                                   i, # to base link : fuselage
                                   torqueObj=[0., 0., torques[j]],
-                                  flags=p.LINK_FRAME, #FIX ME FIXME
+                                  flags=pyb.LINK_FRAME, #FIX ME FIXME
                                   physicsClientId=self.CLIENT
                                   )
 
@@ -1182,17 +1385,17 @@ class BaseAviary(gym.Env):
              direction = np.array([-1., 1., -1., 1.])
              # print('########### F-M prop : ',F_prop, M_prop)
              for i in range(self.drones[nth_drone].INDI_ACTUATOR_NR):
-                 p.applyExternalForce(self.DRONE_IDS[nth_drone],
+                 pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                             i, # Applied to the baselink of the vehicle 
                             forceObj=[F_prop[i][0], F_prop[i][1], F_prop[i][2]],
                             posObj=[0, 0, 0],
-                            flags=p.LINK_FRAME,
+                            flags=pyb.LINK_FRAME,
                             physicsClientId=self.CLIENT
                             )
-                 p.applyExternalTorque(self.DRONE_IDS[nth_drone],
+                 pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
                             i,
                             torqueObj=[0, 0, M_prop[i][2]*direction[i]],
-                            flags=p.LINK_FRAME,
+                            flags=pyb.LINK_FRAME,
                             physicsClientId=self.CLIENT
                             )
              
@@ -1209,17 +1412,17 @@ class BaseAviary(gym.Env):
 
             z_torque = (-torques[0] + torques[1] - torques[2] + torques[3])
             for i in range(self.drones[nth_drone].INDI_ACTUATOR_NR):
-                p.applyExternalForce(self.DRONE_IDS[nth_drone],
+                pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                      i,
                                      forceObj=[f_noise[0], f_noise[1], forces[i]],
                                      posObj=[0, 0, 0],
-                                     flags=p.LINK_FRAME,
+                                     flags=pyb.LINK_FRAME,
                                      physicsClientId=self.CLIENT
                                      )
-            p.applyExternalTorque(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
                                   -1,  # FIX ME : this is not correct , use center of mass !!! 
                                   torqueObj=[m_noise[0], m_noise[1], z_torque],
-                                  flags=p.LINK_FRAME,
+                                  flags=pyb.LINK_FRAME,
                                   physicsClientId=self.CLIENT
                                   )
         wind=0
@@ -1227,15 +1430,15 @@ class BaseAviary(gym.Env):
         drag_coeff = -0.0438 # This is only for Tello (modeled infront of ENAC's Windshape)
         
         if wind:
-            base_rot = np.array(p.getMatrixFromQuaternion(self.quat[nth_drone, :])).reshape(3, 3)
+            base_rot = np.array(pyb.getMatrixFromQuaternion(self.quat[nth_drone, :])).reshape(3, 3)
             #### Simple draft model applied to the base/center of mass #
             # drag_factors = -1 * self.DRAG_COEFF * np.sum(np.array(2*np.pi*rpm/60))
             drag = np.dot(base_rot, drag_coeff*(np.array(self.vel[nth_drone, :]-wind_vector) ))
-            p.applyExternalForce(self.DRONE_IDS[nth_drone],
+            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                  4,
                                  forceObj=drag,
                                  posObj=[0, 0, 0],
-                                 flags=p.LINK_FRAME,
+                                 flags=pyb.LINK_FRAME,
                                  physicsClientId=self.CLIENT
                                  )
 
@@ -1250,7 +1453,7 @@ class BaseAviary(gym.Env):
         # Get orientation of the quad, and generate rotation matrix
         # self.pos[i], self.quat[i] = p.getBasePositionAndOrientation(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
         # self.rpy[i] = p.getEulerFromQuaternion(self.quat[i])
-        R = np.array(p.getMatrixFromQuaternion(self.quat[nth_drone])).reshape(3, 3)
+        R = np.array(pyb.getMatrixFromQuaternion(self.quat[nth_drone])).reshape(3, 3)
 
         # Get quad's inertial speed vector
         # self.vel[i], self.ang_v[i] = p.getBaseVelocity(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
@@ -1319,7 +1522,7 @@ class BaseAviary(gym.Env):
 
         """
         #### Kin. info of all links (propellers and center of mass)
-        link_states = np.array(p.getLinkStates(self.DRONE_IDS[nth_drone],
+        link_states = np.array(pyb.getLinkStates(self.DRONE_IDS[nth_drone],
                                                linkIndices=[0, 1, 2, 3, 4],
                                                computeLinkVelocity=1,
                                                computeForwardKinematics=1,
@@ -1331,11 +1534,11 @@ class BaseAviary(gym.Env):
         gnd_effects = np.array(rpm**2) * self.KF * self.GND_EFF_COEFF * (self.PROP_RADIUS/(4 * prop_heights))**2
         if np.abs(self.rpy[nth_drone,0]) < np.pi/2 and np.abs(self.rpy[nth_drone,1]) < np.pi/2:
             for i in range(4):
-                p.applyExternalForce(self.DRONE_IDS[nth_drone],
+                pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                      i,
                                      forceObj=[0, 0, gnd_effects[i]],
                                      posObj=[0, 0, 0],
-                                     flags=p.LINK_FRAME,
+                                     flags=pyb.LINK_FRAME,
                                      physicsClientId=self.CLIENT
                                      )
         #### TODO: a more realistic model accounting for the drone's
@@ -1360,15 +1563,15 @@ class BaseAviary(gym.Env):
 
         """
         #### Rotation matrix of the base ###########################
-        base_rot = np.array(p.getMatrixFromQuaternion(self.quat[nth_drone, :])).reshape(3, 3)
+        base_rot = np.array(pyb.getMatrixFromQuaternion(self.quat[nth_drone, :])).reshape(3, 3)
         #### Simple draft model applied to the base/center of mass #
         drag_factors = -1 * self.DRAG_COEFF * np.sum(np.array(2*np.pi*rpm/60))
         drag = np.dot(base_rot, drag_factors*np.array(self.vel[nth_drone, :]))
-        p.applyExternalForce(self.DRONE_IDS[nth_drone],
+        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                              4,
                              forceObj=drag,
                              posObj=[0, 0, 0],
-                             flags=p.LINK_FRAME,
+                             flags=pyb.LINK_FRAME,
                              physicsClientId=self.CLIENT
                              )
     
@@ -1394,11 +1597,11 @@ class BaseAviary(gym.Env):
                 alpha = self.DW_COEFF_1 * (self.PROP_RADIUS/(4*delta_z))**2
                 beta = self.DW_COEFF_2 * delta_z + self.DW_COEFF_3
                 downwash = [0, 0, -alpha * np.exp(-.5*(delta_xy/beta)**2)]
-                p.applyExternalForce(self.DRONE_IDS[nth_drone],
+                pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                      4,
                                      forceObj=downwash,
                                      posObj=[0, 0, 0],
-                                     flags=p.LINK_FRAME,
+                                     flags=pyb.LINK_FRAME,
                                      physicsClientId=self.CLIENT
                                      )
 
@@ -1450,13 +1653,13 @@ class BaseAviary(gym.Env):
         pos = pos + self.TIMESTEP * vel
         rpy = rpy + self.TIMESTEP * rpy_rates
         #### Set PyBullet's state ##################################
-        p.resetBasePositionAndOrientation(self.DRONE_IDS[nth_drone],
+        pyb.resetBasePositionAndOrientation(self.DRONE_IDS[nth_drone],
                                           pos,
-                                          p.getQuaternionFromEuler(rpy),
+                                          pyb.getQuaternionFromEuler(rpy),
                                           physicsClientId=self.CLIENT
                                           )
         #### Note: the base's velocity only stored and not used ####
-        p.resetBaseVelocity(self.DRONE_IDS[nth_drone],
+        pyb.resetBaseVelocity(self.DRONE_IDS[nth_drone],
                             vel,
                             [-1, -1, -1], # ang_vel not computed by DYN
                             physicsClientId=self.CLIENT
@@ -1526,7 +1729,7 @@ class BaseAviary(gym.Env):
         """
         if self.GUI:
             AXIS_LENGTH = 2*self.L
-            self.X_AX[nth_drone] = p.addUserDebugLine(lineFromXYZ=[0, 0, 0],
+            self.X_AX[nth_drone] = pyb.addUserDebugLine(lineFromXYZ=[0, 0, 0],
                                                       lineToXYZ=[AXIS_LENGTH, 0, 0],
                                                       lineColorRGB=[1, 0, 0],
                                                       parentObjectUniqueId=self.DRONE_IDS[nth_drone],
@@ -1536,7 +1739,7 @@ class BaseAviary(gym.Env):
                                                       )
 
 
-            self.Y_AX[nth_drone] = p.addUserDebugLine(lineFromXYZ=[0, 0, 0],
+            self.Y_AX[nth_drone] = pyb.addUserDebugLine(lineFromXYZ=[0, 0, 0],
                                                       lineToXYZ=[0, AXIS_LENGTH, 0],
                                                       lineColorRGB=[0, 1, 0],
                                                       parentObjectUniqueId=self.DRONE_IDS[nth_drone],
@@ -1544,7 +1747,7 @@ class BaseAviary(gym.Env):
                                                       replaceItemUniqueId=int(self.Y_AX[nth_drone]),
                                                       physicsClientId=self.CLIENT
                                                       )
-            self.Z_AX[nth_drone] = p.addUserDebugLine(lineFromXYZ=[0, 0, 0],
+            self.Z_AX[nth_drone] = pyb.addUserDebugLine(lineFromXYZ=[0, 0, 0],
                                                       lineToXYZ=[0, 0, AXIS_LENGTH],
                                                       lineColorRGB=[0, 0, 1],
                                                       parentObjectUniqueId=self.DRONE_IDS[nth_drone],
@@ -1575,19 +1778,19 @@ class BaseAviary(gym.Env):
         # p.loadURDF(os.path.dirname(os.path.abspath(__file__))+"/../assets/voliere.urdf",
         #            physicsClientId=self.CLIENT
         #            )
-        p.loadURDF("duck_vhacd.urdf",
+        pyb.loadURDF("duck_vhacd.urdf",
                    [-.5, -.5, .05],
-                   p.getQuaternionFromEuler([0, 0, 0]),
+                   pyb.getQuaternionFromEuler([0, 0, 0]),
                    physicsClientId=self.CLIENT
                    )
-        p.loadURDF("cube_no_rotation.urdf",
+        pyb.loadURDF("cube_no_rotation.urdf",
                    [-.5, -2.5, .5],
-                   p.getQuaternionFromEuler([0, 0, 0]),
+                   pyb.getQuaternionFromEuler([0, 0, 0]),
                    physicsClientId=self.CLIENT
                    )
-        p.loadURDF("sphere2.urdf",
+        pyb.loadURDF("sphere2.urdf",
                    [-2, 5, .5],
-                   p.getQuaternionFromEuler([0,0,0]),
+                   pyb.getQuaternionFromEuler([0,0,0]),
                    physicsClientId=self.CLIENT
                    )
     
@@ -1653,6 +1856,87 @@ class BaseAviary(gym.Env):
         drone.Cn_ctrl = [float(s) for s in vals.split(' ') if s != '']
 
     ################################################################################        
+
+    def _parseURDFVTOLParameters(self, drone, URDF):
+        ''' Loads Fixed-wing related coefficients from URDF file '''
+        URDF_TREE = etxml.parse(os.path.dirname(os.path.abspath(__file__)) + "/../assets/" + URDF).getroot()
+
+        ref = URDF_TREE.find("aero_coeffs/ref")
+        drone.M = float(ref.attrib['M'])
+        drone.alpha0 = float(ref.attrib['alpha0'])
+        drone.Bref = float(ref.attrib['Bref'])
+        drone.Sref = float(ref.attrib['Sref'])
+        drone.Cref = float(ref.attrib['Cref'])
+        drone.Vref = float(ref.attrib['Vref'])
+        drone.oswald = float(ref.attrib['oswald'])
+        drone.AR = float(ref.attrib['AR'])
+        drone.rho = float(ref.attrib['rho'])
+
+        CL = URDF_TREE.find("aero_coeffs/CL")
+        drone.CL = float(CL.attrib['CL'])
+        drone.CL0 = float(CL.attrib['CL0'])
+        drone.CL_alpha = float(CL.attrib['CL_alpha'])
+        drone.CL_q = float(CL.attrib['CL_q'])
+        drone.CL_del_e = float(CL.attrib['CL_del_e'])
+
+        cd = URDF_TREE.find("aero_coeffs/CD")
+        drone.CD = float(cd.attrib['CD'])
+        drone.CD0 = float(cd.attrib['CD0'])
+        drone.CD_alpha = float(cd.attrib['CD_alpha'])
+        drone.CD_q = float(cd.attrib['CD_q'])
+        drone.CD_del_e = float(cd.attrib['CD_del_e'])
+
+        cy = URDF_TREE.find("aero_coeffs/CY")
+        drone.CY0 = float(cy.attrib['CY0'])
+        drone.CY_beta = float(cy.attrib['CY_beta'])
+        drone.CY_p = float(cy.attrib['CY_p'])
+        drone.CY_r = float(cy.attrib['CY_r'])
+        drone.CY_del_r = float(cy.attrib['CY_del_r'])
+        drone.CY_del_a = float(cy.attrib['CY_del_a'])
+
+        cl = URDF_TREE.find("aero_coeffs/Cl")
+        drone.Cl_beta = float(cl.attrib['Cl_beta'])
+        drone.Cl_p = float(cl.attrib['Cl_p'])
+        drone.Cl_r = float(cl.attrib['Cl_r'])
+        drone.Cl_del_r = float(cl.attrib['Cl_del_r'])
+        drone.Cl_del_a = float(cl.attrib['Cl_del_a'])
+
+        cm = URDF_TREE.find("aero_coeffs/Cm")
+        drone.Cm0 = float(cm.attrib['Cm0'])
+        drone.Cm_alpha = float(cm.attrib['Cm_alpha'])
+        drone.Cm_q = float(cm.attrib['Cm_q'])
+        drone.Cm_del_e = float(cm.attrib['Cm_del_e'])
+
+        cn = URDF_TREE.find("aero_coeffs/Cn")
+        drone.Cn_beta = float(cn.attrib['Cn_beta'])
+        drone.Cn_p = float(cn.attrib['Cn_p'])
+        drone.Cn_r = float(cn.attrib['Cn_r'])
+        drone.Cn_del_r = float(cn.attrib['Cn_del_r'])
+        drone.Cn_del_a = float(cn.attrib['Cn_del_a'])
+
+        Thrust = URDF_TREE.find("motor_coeffs/Thrust")
+        drone.angle_deg = float(Thrust.attrib['angle_deg'])
+        drone.x_pos = float(Thrust.attrib['x_pos'])
+        drone.y_pos = float(Thrust.attrib['y_pos'])
+        drone.z_pos = float(Thrust.attrib['z_pos'])
+
+        Thrust = URDF_TREE.find("motor_coeffs/Coeffs")
+        drone.KV  = float(Thrust.attrib['KV'])
+        drone.V_max = float(Thrust.attrib['V_max'])
+        drone.KQ  = float(Thrust.attrib['KQ'])
+        drone.R_motor  = float(Thrust.attrib['R_motor'])
+        drone.i0  = float(Thrust.attrib['i0'])
+        drone.C_Q2 = float(Thrust.attrib['C_Q2'])
+        drone.C_Q1 = float(Thrust.attrib['C_Q1'])
+        drone.C_Q0 = float(Thrust.attrib['C_Q0'])
+        drone.C_T2 = float(Thrust.attrib['C_T2'])
+        drone.C_T1 = float(Thrust.attrib['C_T1'])
+        drone.C_T0 = float(Thrust.attrib['C_T0'])
+
+        Thrust = URDF_TREE.find("motor_coeffs/Prop")
+        drone.D_prop = float(Thrust.attrib['D_prop'])
+
+    ###############################################################################
     def _parseURDFParameters(self,URDF):
         """Loads parameters from an URDF file.
 
@@ -1667,6 +1951,7 @@ class BaseAviary(gym.Env):
 
         mass = URDF_TREE.find("link/inertial/mass")
         M = float(mass.attrib['value'])
+
 
         prop = URDF_TREE.find("properties")
         L = float(prop.attrib['arm'])
