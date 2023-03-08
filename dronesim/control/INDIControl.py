@@ -215,7 +215,7 @@ class INDIControl(BaseControl):
         self.last_thrust = 0.0
         # self.indi_increment = np.zeros(4)
         #self.cmd = np.ones(self.indi_actuator_nr)*0.5
-        self.cmd = np.array([0.7,0.7,0.7,0.7]) # by doing that i make sure it starts smooth for fixed wing
+        self.cmd = np.array([1.,1.,1.,1.]) # by doing that i make sure it starts smooth for fixed wing
         self.last_vel = np.zeros(3)
         self.last_torque = np.zeros(3) # For SU2 controller
 

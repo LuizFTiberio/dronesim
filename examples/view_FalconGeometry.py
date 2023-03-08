@@ -116,7 +116,7 @@ while 1:
 
     p.applyExternalForce(vehicle,
                          2,  # link number
-                         forceObj=[4*servo2, 0, servo2],
+                         forceObj=[0, 0, 0],
                          posObj=[0, 0, 0],
                          flags=p.LINK_FRAME,
                          physicsClientId=physicsClient
@@ -125,7 +125,7 @@ while 1:
     # AERO MOMENTS
     p.applyExternalTorque(vehicle,
                             1,
-                            torqueObj=[0, 0, 0],
+                            torqueObj=[0, 4*servo2, 0],
                             flags=p.LINK_FRAME,
                             physicsClientId=physicsClient
                             )

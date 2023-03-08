@@ -43,7 +43,7 @@ if __name__ == "__main__":
     parser.add_argument('--obstacles',          default=False,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
     parser.add_argument('--simulation_freq_hz', default=240,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
     parser.add_argument('--control_freq_hz',    default=96,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--duration_sec',       default=4,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
+    parser.add_argument('--duration_sec',       default=2,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
     ARGS = parser.parse_args()
 
     #### Initialize the simulation #############################
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     ## To forward X ###
     INIT_RPYS = np.array([[0., 0, 0.]])
-    INIT_VELS = np.array([[15., 0., 2.]])
+    INIT_VELS = np.array([[14., 0., 0.7]])
 
     #### Initialize a circular trajectory ######################
     PERIOD = 15
@@ -134,7 +134,7 @@ if __name__ == "__main__":
                                                                        target_pos= np.array([250,0,20]),##TARGET_POS[wp_counters[j]],
                                                                        target_vel=np.array([15,0,0]))
                 # Over-write the action
-                action[str(j)] = np.array([.5, .5, .5,.5])
+                action[str(j)] = np.array([1., 1., 1.,1.])
 
             #### Go to the next way point and loop #####################
             for j in range(ARGS.num_drones):

@@ -1218,7 +1218,7 @@ class BaseAviary(gym.Env):
         # Prop1 FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                1,
-                               forceObj=[T1*np.cos(np.degrees(drone.angle_deg)), 0., -T1*np.sin(np.degrees(drone.angle_deg))],
+                               forceObj=[T1*np.cos(np.radians(drone.angle_deg)), 0., -T1*np.sin(np.radians(drone.angle_deg))],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
@@ -1235,7 +1235,7 @@ class BaseAviary(gym.Env):
         # Prop2 FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                2,
-                               forceObj=[T2*np.cos(np.degrees(drone.angle_deg)), 0., -T2*np.sin(np.degrees(drone.angle_deg))],
+                               forceObj=[T2*np.cos(np.radians(drone.angle_deg)), 0., T2*np.sin(np.radians(drone.angle_deg))],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
@@ -1252,7 +1252,7 @@ class BaseAviary(gym.Env):
         # Prop3 FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                3,
-                               forceObj=[T3*np.cos(np.degrees(drone.angle_deg)), 0., -T3*np.sin(np.degrees(drone.angle_deg))],
+                               forceObj=[T3*np.cos(np.radians(drone.angle_deg)), 0., -T3*np.sin(np.radians(drone.angle_deg))],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
@@ -1269,7 +1269,7 @@ class BaseAviary(gym.Env):
         # Prop4 FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                4,
-                               forceObj=[T4*np.cos(np.degrees(drone.angle_deg)), 0., T4*np.sin(np.degrees(drone.angle_deg))],
+                               forceObj=[T4*np.cos(np.radians(drone.angle_deg)), 0., T4*np.sin(np.radians(drone.angle_deg))],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
