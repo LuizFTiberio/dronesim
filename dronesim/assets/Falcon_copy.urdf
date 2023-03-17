@@ -33,18 +33,18 @@
 
   <control>
     <indi actuator_nr="4" output_nr="4" />
-    <indi_1 roll="   30. -30. -30. 30." />
-    <indi_2 pitch="  80.  -80. 80. -80." />
-    <indi_3 yaw="    -40. -40. 40. 40." />
-    <indi_4 thrust=" 2. 2. 2. 2." />
+    <indi_1 roll="   20. -20. -20. 20." />
+    <indi_2 pitch="  40.  -40. 40. -40." />
+    <indi_3 yaw=" -20. -20. 20. 20." />
+    <indi_4 thrust=" 50. 50. 50. 50." />
 
     <indi_guidance_gains>
-      <pos kp="2.2" kd="1.4"/>
+      <pos kp="1.8" kd="1.8"/>
     </indi_guidance_gains>
 
     <indi_att_gains>
-      <att  p="4" q="5." r="4" />
-      <rate p="10." q="10." r="10." />
+      <att  p="3." q="3." r="5." />
+      <rate p="18." q="18." r="10." />
     </indi_att_gains>
 
     <pwm>
@@ -55,12 +55,12 @@
 
     <aero_coeffs>
     <ref rho="1.225" alpha0="0.47" Sref="0.075" Bref="0.7" Cref="0.1" Vref="18." oswald="0.7" AR="6" M="60" epsilon="0.16" actuator_nr="4"/>
-    <CL  CL = "0.5" CL0="0.17822"   CL_alpha="4.383723" CL_q="5.988145"   CL_del_e="0"/>
-    <CD  CD = "0.2" CD0="0.00167"  CD_alpha="0.00425"  CD_q="0.0" CD_p="0.0" CD_del_e="0"/>
-    <CY  CY0="0.0"   CY_beta="0.000009"  CY_p="0.100364" CY_r="-0.005805"  CY_del_r="0" CY_del_a="0"/>
-    <Cl  Cl_beta="-0.049401"  Cl_p="-0.437867" Cl_r="0.109027" Cl_del_a="0" Cl_del_r="0"/>
-    <Cm  Cm0="-0.03128" Cm_alpha="-0.933020" Cm_q="-1.906906" Cm_del_e="-0"/>
-    <Cn  Cn_beta="0.002883"  Cn_p="-0.032317" Cn_r="-0.003342" Cn_del_a="0.0" Cn_del_r="0."/>
+    <CL  CL = "0.5" CL0="0.15"   CL_alpha="5.61" CL_q="7.95"   CL_del_e="0.13"/>
+    <CD  CD = "0.2" CD0="0.043"  CD_alpha="0.03"  CD_q="0.0" CD_p="0.0" CD_del_e="0.0135"/>
+    <CY  CY0="0.0"   CY_beta="-0.83"  CY_p="0.0" CY_r="0.0"  CY_del_r="0.19" CY_del_a="0.075"/>
+    <Cl  Cl_beta="0.13"  Cl_p="-0.51" Cl_r="0.045" Cl_del_a="0.17" Cl_del_r="0.0024"/>
+    <Cm  Cm0="0.0035" Cm_alpha=" -1.74" Cm_q="-38.21" Cm_del_e="-0.99"/>
+    <Cn  Cn_beta="0.073"  Cn_p="-0.069" Cn_r="-0.095" Cn_del_a="-0.011" Cn_del_r="-0.069"/>
   </aero_coeffs>
 
   <motor_coeffs>
@@ -74,7 +74,7 @@
     <inertial>
       <origin rpy="0 0 0" xyz="0.045 0 0.0"/>
       <mass value="0.420"/>
-      <inertia ixx="0.003244" iyy="0.00635" izz="0.00359"/>
+      <inertia ixx="0.03244" iyy="0.0635" izz="0.0359"/>
     </inertial>
 
     <visual>

@@ -92,7 +92,12 @@ def jac_vec_quat(vec,q):
     p2 = np.dot(np.dot(v.T,vec),I) + v.dot(vec.T) - vec.dot(v.T) - w*skew(vec)
     return np.hstack([p1.reshape(3,1),p2])*2 # p1, p2
 
-
+def normalize_angle(angle):
+    if angle > np.pi:
+        angle -= 2 * np.pi
+    if angle < -np.pi:
+        angle += 2 * np.pi
+    return angle
 class INDIControl(BaseControl):
     """INDI control class for Crazyflies.
 
@@ -310,6 +315,82 @@ class INDIControl(BaseControl):
 
         return rpm, pos_e, computed_target_rpy[2] - cur_rpy[2]
 
+
+    def computeControl_hybrid(self,
+                       control_timestep,
+                       cur_pos,
+                       cur_quat,
+                       cur_vel,
+                       cur_ang_vel,
+                       target_pos,
+                       current_wind = np.zeros(6),
+                       target_rpy=np.zeros(3),
+                       target_vel=np.zeros(3),
+                       target_rpy_rates=np.zeros(3)
+                       ):
+        """Computes the PID control action (as RPMs) for a single drone.
+
+        Parameters
+        ----------
+        control_timestep : float
+            The time step at which control is computed.
+        cur_pos : ndarray
+            (3,1)-shaped array of floats containing the current position.
+        cur_quat : ndarray
+            (4,1)-shaped array of floats containing the current orientation as a quaternion.
+        cur_vel : ndarray
+            (3,1)-shaped array of floats containing the current velocity.
+        cur_ang_vel : ndarray
+            (3,1)-shaped array of floats containing the current angular velocity.
+        target_pos : ndarray
+            (3,1)-shaped array of floats containing the desired position.
+        target_rpy : ndarray, optional
+            (3,1)-shaped array of floats containing the desired orientation as roll, pitch, yaw.
+        target_vel : ndarray, optional
+            (3,1)-shaped array of floats containing the desired velocity.
+        target_rpy_rates : ndarray, optional
+            (3,1)-shaped array of floats containing the desired roll, pitch, and yaw rates.
+
+        Returns
+        -------
+        ndarray
+            (4,1)-shaped array of integers containing the RPMs to apply to each of the 4 motors.
+        ndarray
+            (3,1)-shaped array of floats containing the current XYZ position error.
+        float
+            The current yaw error.
+
+        """
+        self.control_counter += 1
+
+        gi_speed_sp = self._compute_guidance_indi_run_pos(control_timestep,
+                               cur_pos,
+                               cur_vel,
+                               target_pos,
+                               target_vel)
+
+        sp_accel = self._compute_accel_from_speed_sp(control_timestep, cur_quat, cur_vel, gi_speed_sp,
+                                                     current_wind)
+
+        thrust, computed_target_rpy = self._guidance_indi_hybrid_run(control_timestep,
+                                                                     cur_pos,
+                                                                     cur_quat,
+                                                                     cur_vel,
+                                                                     target_pos,
+                                                                     target_rpy,
+                                                                     target_vel,
+                                                                     sp_accel)
+
+        rpm = self._INDIAttitudeControl(control_timestep,
+                                          thrust,
+                                          cur_quat,
+                                          cur_ang_vel,
+                                          computed_target_rpy)
+        airspeed = np.linalg.norm(cur_vel)
+        cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
+        phi, theta, psi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
+        return rpm, 0. ,0.
+
     
     ################################################################################
 
@@ -385,7 +466,6 @@ class INDIControl(BaseControl):
 
         # EULER VERSION
         # # Calculate matrix of partial derivatives
-        # guidance_indi_calcG_yxz(&Ga, &eulers_yxz);
         cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
         phi, theta, psi = cur_rpy[0],cur_rpy[1],cur_rpy[2]
         theta = np.pi/2 - theta
@@ -428,9 +508,9 @@ class INDIControl(BaseControl):
         G_1_2 = stheta * spsi - sphi * ctheta * cpsi
         G_2_2 = cphi * ctheta
 
-        G = np.array([[G_0_0, G_0_1, G_0_2],
-                      [G_1_0, G_1_1, G_1_2],
-                      [G_2_0, G_2_1, G_2_2]])
+        G = np.array([[G_0_0, G_0_1, -G_0_2],
+                      [G_1_0, G_1_1, -G_1_2],
+                      [G_2_0, G_2_1, -G_2_2]])
 
         # Invert this matrix
         G_inv = np.linalg.pinv(G) #FIX ME
@@ -445,7 +525,6 @@ class INDIControl(BaseControl):
 
         thrust = self.last_thrust + control_increment[2]
 
-        target_euler = np.array([0,0,0])
 
         return thrust, target_euler, pos_e, target_quat #quat_increment
     
@@ -456,9 +535,7 @@ class INDIControl(BaseControl):
                                thrust,
                                cur_quat,
                                cur_ang_vel,
-                               target_euler,
-                               target_quat,
-                               target_rpy_rates
+                               target_euler
                                ):
         """INDI attitude control.
 
@@ -537,12 +614,328 @@ class INDIControl(BaseControl):
         indi_v[3] = thrust - self.last_thrust #* 0.
         self.last_thrust = thrust
 
-
         indi_du = np.dot(np.linalg.pinv(self.G1),indi_v)
         self.cmd += indi_du
         self.cmd = np.clip(self.cmd, self.MIN_PWM, self.MAX_PWM) # command in PWM
 
+
         return self.cmd #self.rpm_of_pwm(self.cmd)
     
     ################################################################################
+    def _guidance_indi_hybrid_run(self,
+                               control_timestep,
+                               cur_pos,
+                               cur_quat,
+                               cur_vel,
+                               target_pos,
+                               target_rpy,
+                               target_vel,
+                               sp_accel
+                               ):
+
+        """ENAC generic INDI position control.
+
+        Parameters
+        ----------
+        control_timestep : float
+            The time step at which control is computed.
+        cur_pos : ndarray
+            (3,1)-shaped array of floats containing the current position.
+        cur_quat : ndarray
+            (4,1)-shaped array of floats containing the current orientation as a quaternion.
+        cur_vel : ndarray
+            (3,1)-shaped array of floats containing the current velocity.
+        target_pos : ndarray
+            (3,1)-shaped array of floats containing the desired position.
+        target_rpy : ndarray
+            (3,1)-shaped array of floats containing the desired orientation as roll, pitch, yaw.
+        target_vel : ndarray
+            (3,1)-shaped array of floats containing the desired velocity.
+
+        Returns
+        -------
+        float
+            The target thrust along the drone z-axis.
+        ndarray
+            (3,1)-shaped array of floats containing the target roll, pitch, and yaw.
+        float
+            The current position error.
+
+        """
+
+        cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
+        phi, theta, psi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
+        theta = np.pi/2 -theta
+        psi = - psi
+
+        # Calculate the transition percentage so that the ctrl_effecitveness scheduling works
+        # TODO check why I'm doing this
+        transition_percentage = theta/np.radians(-75) * 100
+        transition_percentage = np.clip(transition_percentage,0,100)
+
+        sphi, stheta, spsi = np.sin(phi), np.sin(theta), np.sin(psi)
+        cphi, ctheta, cpsi = np.cos(phi), np.cos(theta), np.cos(psi)
+        lift = np.sin(theta) * self.GRAVITY
+        T = -np.cos(theta) * self.GRAVITY
+        min_pitch = -80.0
+        middle_pitch = -50.0
+        max_pitch = -20.0
+        GUIDANCE_INDI_LIFTD_ASQ = 0.20
+        GUIDANCE_INDI_LIFTD_P80 = GUIDANCE_INDI_LIFTD_ASQ * 12 ** 2
+        GUIDANCE_INDI_LIFTD_P50 = GUIDANCE_INDI_LIFTD_P80 / 2
+        airspeed = np.linalg.norm(cur_vel)
+        pitch_interp = np.clip(np.degrees(theta), min_pitch, max_pitch)
+        if airspeed < 12:
+            if pitch_interp > middle_pitch:
+                ratio = (pitch_interp - max_pitch) / (middle_pitch - max_pitch)
+                liftd = -GUIDANCE_INDI_LIFTD_P50 * ratio
+            else:
+                ratio = (pitch_interp - middle_pitch) / (min_pitch - middle_pitch)
+                liftd = -(GUIDANCE_INDI_LIFTD_P80 - GUIDANCE_INDI_LIFTD_P50) * ratio - GUIDANCE_INDI_LIFTD_P50
+        else:
+            liftd = -GUIDANCE_INDI_LIFTD_ASQ * airspeed * airspeed
+        # Matrix of partial derivatives for Lift force
+        GUIDANCE_INDI_PITCH_EFF_SCALING = 1.0
+
+        rphi = phi
+        crphi = np.cos(phi)
+        srphi = np.sin(phi)
+        rtheta =   theta
+        crtheta = np.cos(rtheta)
+        srtheta = np.sin(rtheta)
+        rpsi =  psi
+        crpsi = np.cos(rpsi)
+        srpsi = np.sin(rpsi)
+        G_0_0 = crphi*crtheta*srpsi*T + crphi*srpsi*lift
+        G_1_0 = -crphi*crtheta*crpsi*T - crphi*crpsi*lift
+        G_2_0 = -srphi*crtheta*T -srphi*lift
+        G_0_1 = (crtheta*crpsi - srphi*srtheta*srpsi)*T*GUIDANCE_INDI_PITCH_EFF_SCALING + srphi*srpsi*liftd
+        G_1_1 = (crtheta*srpsi + srphi*srtheta*crpsi)*T*GUIDANCE_INDI_PITCH_EFF_SCALING - srphi*crpsi*liftd
+        G_2_1 = -crphi*srtheta*T*GUIDANCE_INDI_PITCH_EFF_SCALING + crphi*liftd
+        G_0_2 = srtheta*crpsi + srphi*crtheta*srpsi
+        G_1_2 = srtheta*srpsi - srphi*crtheta*crpsi
+        G_2_2 = crphi*crtheta
+
+        G = np.array([[G_0_0, G_0_1, G_0_2],
+                      [G_1_0, G_1_1, G_1_2],
+                      [G_2_0, G_2_1, G_2_2]])
+
+        # Invert this matrix
+        G_inv = np.linalg.pinv(G)
+
+        # Calculate the acceleration via finite difference
+        if self.control_counter == 1:
+            # lets avoid assuming v(t-1) is zero because it causes explosion in the accel error
+            self.last_vel = cur_vel
+        cur_accel = (cur_vel - self.last_vel) / control_timestep
+        self.last_vel = cur_vel
+
+        a_diff = np.zeros(3)
+        a_diff[0] = sp_accel[0] - cur_accel[0]
+        a_diff[1] = sp_accel[1] - cur_accel[1]
+        a_diff[2] = sp_accel[2] - cur_accel[2]
+
+        # Bound the acceleration error so that the linearization still holds
+        a_diff[0] = np.clip(a_diff[0], -6.0, 6.0)
+        a_diff[1] = np.clip(a_diff[1], -6.0, 6.0)
+        a_diff[2] = np.clip(a_diff[2], -9.0, 9.0)
+
+        euler_cmd = G_inv.dot(a_diff)
+        thrust = euler_cmd[2]
+
+        # Coordinated turn
+        # Feedforward estimate angular rotation omega = g*tan(phi)/v
+        max_phi = np.radians(60.)
+
+        # We are dividing by the airspeed, so a lower bound is important
+        airspeed_turn = np.clip(np.linalg.norm(cur_vel),10,30)
+
+        guidance_euler_cmd = np.zeros(3)
+        guidance_euler_cmd[0] = phi + euler_cmd[0]
+        guidance_euler_cmd[1] = np.pi/2 -theta + euler_cmd[1]
+
+        # Bound euler angles to prevent flipping
+        guidance_euler_cmd[0] = np.clip(guidance_euler_cmd[0], -max_phi, max_phi)
+        guidance_euler_cmd[1] = np.clip(guidance_euler_cmd[1], np.radians(-120), np.radians(25))
+
+        # Use the current roll angle to determine the corresponding heading rate of change.
+        coordinated_turn_roll = phi
+
+        phi_cond1 = 1 if guidance_euler_cmd[0]> 0 else -1
+        phi_cond2 = 1 if guidance_euler_cmd[0]< 0 else -1
+        if ((guidance_euler_cmd[1] > 0.0) and (np.abs(guidance_euler_cmd[0]) < guidance_euler_cmd[1])):
+            coordinated_turn_roll = (phi_cond1 - phi_cond2) * guidance_euler_cmd[1]
+
+        if (np.abs(coordinated_turn_roll) < max_phi):
+            omega = 9.81 / airspeed_turn * np.tan(coordinated_turn_roll)
+        else :
+            # max 60 degrees roll
+            coordinated_turn_cond = 1 if coordinated_turn_roll> 0 else -1
+            omega = 9.81 / airspeed_turn * 1.72305 * (2*coordinated_turn_cond)
+
+        guidance_indi_hybrid_heading_sp = psi
+        guidance_indi_hybrid_heading_sp += omega / 240
+        guidance_indi_hybrid_heading_sp = normalize_angle(guidance_indi_hybrid_heading_sp)
+        guidance_euler_cmd[2] = guidance_indi_hybrid_heading_sp
+
+        #print(np.degrees(guidance_euler_cmd),np.degrees(np.array([phi,theta,psi])))
+
+        return thrust, guidance_euler_cmd
+
+
+    def _compute_guidance_indi_run_pos(self,
+                               control_timestep,
+                               cur_pos,
+                               cur_vel,
+                               target_pos,
+                               target_vel):
+
+        """ENAC generic INDI position control.
+
+        Parameters
+        ----------
+        control_timestep : float
+            The time step at which control is computed.
+        cur_pos : ndarray
+            (3,1)-shaped array of floats containing the current position.
+        cur_quat : ndarray
+            (4,1)-shaped array of floats containing the current orientation as a quaternion.
+        cur_vel : ndarray
+            (3,1)-shaped array of floats containing the current velocity.
+        target_pos : ndarray
+            (3,1)-shaped array of floats containing the desired position.
+        target_rpy : ndarray
+            (3,1)-shaped array of floats containing the desired orientation as roll, pitch, yaw.
+        target_vel : ndarray
+            (3,1)-shaped array of floats containing the desired velocity.
+
+        Returns
+        -------
+        float
+            The target thrust along the drone z-axis.
+        ndarray
+            (3,1)-shaped array of floats containing the target roll, pitch, and yaw.
+        float
+            The current position error.
+
+        """
+        gi_speed_sp = np.zeros(3)
+        pos_err = target_pos - cur_pos
+        gi_speed_sp[0] = pos_err[0] * self.guidance_indi_pos_gain + target_vel[0]
+        gi_speed_sp[1] = pos_err[1] * self.guidance_indi_pos_gain + target_vel[1]
+        gi_speed_sp[2] = pos_err[2] * self.guidance_indi_pos_gain + target_vel[2]
+        airspeed = np.linalg.norm(cur_vel)
+        if airspeed>13:
+            gi_speed_sp[2] = np.clip(gi_speed_sp[2],-4,4)
+        return gi_speed_sp
+
+
+    def _compute_accel_from_speed_sp(self,
+                               control_timestep,
+                               cur_quat,
+                               cur_vel,
+                               gi_speed_sp,
+                               current_wind,
+                               ):
+
+        """ENAC generic INDI position control.
+
+        Parameters
+        ----------
+        control_timestep : float
+            The time step at which control is computed.
+        cur_pos : ndarray
+            (3,1)-shaped array of floats containing the current position.
+        cur_quat : ndarray
+            (4,1)-shaped array of floats containing the current orientation as a quaternion.
+        cur_vel : ndarray
+            (3,1)-shaped array of floats containing the current velocity.
+        target_pos : ndarray
+            (3,1)-shaped array of floats containing the desired position.
+        target_rpy : ndarray
+            (3,1)-shaped array of floats containing the desired orientation as roll, pitch, yaw.
+        target_vel : ndarray
+            (3,1)-shaped array of floats containing the desired velocity.
+
+        Returns
+        -------
+        float
+            The target thrust along the drone z-axis.
+        ndarray
+            (3,1)-shaped array of floats containing the target roll, pitch, and yaw.
+        float
+            The current position error.
+
+        """
+        guidance_indi_max_airspeed = 25
+        heading_bank_gain = 2
+        speed_gain =self.guidance_indi_speed_gain
+        speed_gainz = self.guidance_indi_speed_gain*1.5
+
+        cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
+        phi, theta, psi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
+        cpsi = np.cos(psi)
+        spsi = np.sin(psi)
+        accel_sp = np.zeros(3)
+
+        speed_sp_b_x =  cpsi * gi_speed_sp[0] + spsi * gi_speed_sp[1]
+        speed_sp_b_y = -spsi * gi_speed_sp[0] + cpsi * gi_speed_sp[1]
+        airspeed =np.linalg.norm(cur_vel)
+        R_vb = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
+        steady_state = current_wind[0:3]
+        gust = current_wind[3:6]
+        # convert wind vector from world to body frame and add gust
+        windspeed = R_vb @ steady_state + gust
+        desired_airspeed = gi_speed_sp - windspeed
+        norm_des_as = np.linalg.norm(desired_airspeed)
+
+        if airspeed>10 and norm_des_as>12 :
+            #turn
+            if norm_des_as > guidance_indi_max_airspeed:
+                groundspeed_factor = 0.0
+                if np.linalg.norm(windspeed) < guidance_indi_max_airspeed:
+                    av = gi_speed_sp[0] * gi_speed_sp[0] + gi_speed_sp[1] * gi_speed_sp[1]
+                    bv = -2. *(windspeed[0] * gi_speed_sp[0] + windspeed[1] * gi_speed_sp[1])
+                    cv = windspeed[0] * windspeed[0] + windspeed[1] * windspeed[1] - guidance_indi_max_airspeed * guidance_indi_max_airspeed
+                    dv = np.abs(bv * bv - 4.0*av * cv)
+                    groundspeed_factor = (-bv + np.sqrt(dv)) / (2. * av)
+
+                desired_airspeed[0] = groundspeed_factor * gi_speed_sp[0] - windspeed[0]
+                desired_airspeed[1] = groundspeed_factor * gi_speed_sp[1] - windspeed[1]
+                speed_sp_b_x = guidance_indi_max_airspeed
+
+            # desired airspeed can not be larger than max airspeed
+            speed_sp_b_x = np.minimum(norm_des_as, guidance_indi_max_airspeed)
+            # calculate accel sp in body axes, because we need to regulate airspeed
+            sp_accel_b = np.zeros(3)
+            sp_accel_b[1] = np.arctan2(desired_airspeed[1], desired_airspeed[0]) - psi
+            sp_accel_b[1] = normalize_angle(sp_accel_b[1]) * heading_bank_gain
+            sp_accel_b[0] = (speed_sp_b_x - airspeed) * speed_gain
+
+            accel_sp[0] = cpsi * sp_accel_b[0] - spsi * sp_accel_b[1]
+            accel_sp[1] = spsi * sp_accel_b[0] + cpsi * sp_accel_b[1]
+            accel_sp[2] = (gi_speed_sp[2] - cur_vel[2]) * speed_gainz
+        else:
+            # Go somewhere in the shortest way
+            if airspeed > 10:
+                groundspeed_x = cpsi * cur_vel[0] + spsi * cur_vel[1]
+                speed_increment = speed_sp_b_x - groundspeed_x
+
+                if ((speed_increment + airspeed) > guidance_indi_max_airspeed):
+                    speed_sp_b_x = guidance_indi_max_airspeed + groundspeed_x - airspeed
+
+            gi_speed_sp[0] = cpsi * speed_sp_b_x - spsi * speed_sp_b_y;
+            gi_speed_sp[1] = spsi * speed_sp_b_x + cpsi * speed_sp_b_y;
+
+            accel_sp[0] = (gi_speed_sp[0]- cur_vel[0]) * speed_gain
+            accel_sp[1] = (gi_speed_sp[1]- cur_vel[1]) * speed_gain
+            accel_sp[2] = (gi_speed_sp[2]- cur_vel[2]) * speed_gainz
+
+            accelbound = 3.0 + airspeed / guidance_indi_max_airspeed * 5.0
+            accel_sp[0] = np.clip(accel_sp[0], -accelbound, accelbound)
+            accel_sp[1] = np.clip(accel_sp[1], -accelbound, accelbound)
+            accel_sp[2] = np.clip(accel_sp[2], -3.0, 3.0)
+
+        return accel_sp
+
 #EOF

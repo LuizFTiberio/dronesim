@@ -44,7 +44,7 @@ planeId = p.loadURDF("plane.urdf")
 textureId = p.loadTexture("checker_grid.jpg")
 
 vehicleStartPos = [0, 0, 1]
-vehicleStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
+vehicleStartOrientation = p.getQuaternionFromEuler([0,0, 0])
 
 servo1Id = p.addUserDebugParameter("serv1", -1.5, 1.5, 0)
 servo2Id = p.addUserDebugParameter("serv2", -0.3, 0.3, 0)
@@ -115,7 +115,7 @@ while 1:
     servo2 = p.readUserDebugParameter(servo2Id)
 
     p.applyExternalForce(vehicle,
-                         2,  # link number
+                         1,  # link number
                          forceObj=[0, 0, 0],
                          posObj=[0, 0, 0],
                          flags=p.LINK_FRAME,
@@ -125,7 +125,7 @@ while 1:
     # AERO MOMENTS
     p.applyExternalTorque(vehicle,
                             1,
-                            torqueObj=[0, 4*servo2, 0],
+                            torqueObj=[0, 0, servo2],
                             flags=p.LINK_FRAME,
                             physicsClientId=physicsClient
                             )

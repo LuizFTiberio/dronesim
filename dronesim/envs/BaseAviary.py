@@ -13,9 +13,11 @@ import gym
 import pickle
 import sys
 
+
 # For advanced propeller model based on database
 from dronesim.utils.utils import calculate_propeller_forces_moments
 from dronesim.database.propeller_database import *
+from dronesim.utils.wind_simulation import WindSimulation
 
 filename = "../dronesim/utils/kpls_thrust.pkl"
 with open(filename, "rb") as thrust:
@@ -138,7 +140,8 @@ class BaseAviary(gym.Env):
                  obstacles=False,
                  user_debug_gui=True,
                  vision_attributes=False,
-                 dynamics_attributes=False
+                 dynamics_attributes=False,
+                 ctrl_gains=np.zeros(4)
                  ):
         """Initialization of a generic aviary environment.
 
@@ -183,6 +186,7 @@ class BaseAviary(gym.Env):
         self.AGGR_PHY_STEPS = aggregate_phy_steps
         #### Parameters ############################################
         self.NUM_DRONES = num_drones
+        self.CTRL_GAINS = ctrl_gains
         self.NEIGHBOURHOOD_RADIUS = neighbourhood_radius
         #### Options ###############################################
         self.DRONE_MODEL = drone_model
@@ -278,7 +282,7 @@ class BaseAviary(gym.Env):
                 self.INPUT_SWITCH = pyb.addUserDebugParameter("Use GUI RPM", 9999, -1, 0, physicsClientId=self.CLIENT)
         else:
             #### Without debug GUI #####################################
-            self.CLIENT = pyb.connect(p.DIRECT)
+            self.CLIENT = pyb.connect(pyb.DIRECT)
             #### Uncomment the following line to use EGL Render Plugin #
             #### Instead of TinyRender (CPU-based) in PYB's Direct mode
             # if platform == "linux": p.setAdditionalSearchPath(pybullet_data.getDataPath()); plugin = p.loadPlugin(egl.get_filename(), "_eglRendererPlugin"); print("plugin=", plugin)
@@ -357,7 +361,8 @@ class BaseAviary(gym.Env):
     ################################################################################
 
     def step(self,
-             action
+             action,
+             current_wind
              ):
         """Advances the environment by one simulation step.
 
@@ -437,7 +442,7 @@ class BaseAviary(gym.Env):
             #### Step the simulation using the desired physics update ##
             for i in range (self.NUM_DRONES):
                 if self.PHYSICS == Physics.PYB:
-                    self._physics(clipped_action[str(i)], i)
+                    self._physics(clipped_action[str(i)], i,current_wind)
                 elif self.PHYSICS == Physics.DYN:
                     self._dynamics(clipped_action[i, :], i)
                 elif self.PHYSICS == Physics.PYB_GND:
@@ -769,7 +774,8 @@ class BaseAviary(gym.Env):
     
     def _physics(self,
                  cmd, # was rpm
-                 nth_drone
+                 nth_drone,
+                 current_wind
                  ):
         """Base PyBullet physics implementation.
 
@@ -791,7 +797,7 @@ class BaseAviary(gym.Env):
         elif 'coaxial_birotor' in self.drones[nth_drone].TYPE:
             self._coaxial_birotor_physics(cmd,nth_drone)
         elif 'winged_vtol_physics' in self.drones[nth_drone].TYPE:
-            self._winged_vtol_physics(cmd,nth_drone)
+            self._winged_vtol_physics(cmd,nth_drone,current_wind)
         else:
             rpm = self.drones[nth_drone].PWM2RPM_SCALE * cmd + self.drones[nth_drone].PWM2RPM_CONST
             # rpm = 20000.*cmd
@@ -1095,36 +1101,44 @@ class BaseAviary(gym.Env):
 
     def _winged_vtol_physics(self,
                             cmd,
-                            nth_drone
+                            nth_drone,
+                            current_wind
                             ):
         '''
         VTOL flight dynamics based on  the models by Randy Beard and Tim McLain
         https://github.com/randybeard/uavbook
         We begin by taking states, and then calculate the forces and moments
         '''
-
         # calculate atm data - no wind for starters
         quaternion = self.quat[nth_drone, :]
         u,v,w = self.vel[nth_drone, :]
         R_vb = np.array(pyb.getMatrixFromQuaternion(quaternion)).reshape(3, 3)
-        wind_body_frame = np.array([0,0,0]) #TODO
-        v_air = np.array([u, v, w])
-        ur = v_air[0] - wind_body_frame[0]
-        vr = v_air[1] - wind_body_frame[1]
-        wr = v_air[2] - wind_body_frame[2]
+
+        steady_state = current_wind[0:3]
+        gust = current_wind[3:6]
+        # convert wind vector from world to body frame and add gust
+        wind_body_frame = R_vb @ steady_state + gust
+
+        v_air_i = np.array([u, v, w])
+        v_air_b = R_vb.T.dot(v_air_i)
+        ur = v_air_b[0] - wind_body_frame[0]
+        vr = v_air_b[1] - wind_body_frame[1]
+        wr = v_air_b[2] - wind_body_frame[2]
         # compute airspeed
-        Va = np.sqrt(ur ** 2 + vr ** 2 + wr ** 2)
+        Va = np.sqrt(ur ** 2 + vr ** 2 + wr ** 2)[0]
         # compute angle of attack
         if ur == 0:
-            alpha = np.sign(wr) * np.pi / 2
+            alpha = np.sign(-wr) * np.pi / 2
         else:
-            alpha = -np.arctan(wr / ur)
+            alpha = np.arctan(-wr / ur)
         # compute sideslip angle
         if Va == 0:
             beta = np.sign(vr) * np.pi / 2
         else:
             beta = np.arcsin(vr / np.sqrt(ur ** 2 + vr ** 2 + wr ** 2))
 
+        alpha = alpha[0]
+        beta = beta[0]
         # calculate forces and moments - some transformations
         phi, theta, psi = self.rpy[nth_drone, :]
         p,q,r = self.ang_v[nth_drone, :]
@@ -1193,9 +1207,6 @@ class BaseAviary(gym.Env):
                     drone.Cn_beta * beta + drone.Cn_p * p * drone.Bref / (2 * Va) +
                     drone.Cn_r * r * drone.Bref / (2 * Va) +
                     drone.Cn_del_a * cmd_aileron + drone.Cn_del_r * cmd_rudder)
-
-        debug_point = 0
-        print(np.degrees(alpha),cmd)
 
         # Apply the forces and moments
         # [0,0,0] - first term positive moves front (in x),second term positive moves left (in the y axis) positive third term is point up
@@ -1991,10 +2002,17 @@ class BaseAviary(gym.Env):
         indi_output_nr = int(indi.attrib['output_nr'])
         G1 = np.zeros((indi_output_nr, indi_actuator_nr))
 
-        indi = URDF_TREE.find("control")
-        for i in range(indi_output_nr):
-            vals = [str(k) for k in indi[i+1].attrib.values()]
-            G1[i] = [float(s) for s in vals[0].split(' ') if s != '']
+        if np.array_equal(self.CTRL_GAINS, np.zeros(4)) :
+            indi = URDF_TREE.find("control")
+            for i in range(indi_output_nr):
+                vals = [str(k) for k in indi[i+1].attrib.values()]
+                G1[i] = [float(s) for s in vals[0].split(' ') if s != '']
+
+        else:
+            G1 = np.array([[self.CTRL_GAINS[0],-self.CTRL_GAINS[0],-self.CTRL_GAINS[0],self.CTRL_GAINS[0]],
+                           [self.CTRL_GAINS[1], -self.CTRL_GAINS[1], self.CTRL_GAINS[1], -self.CTRL_GAINS[1]],
+                           [-self.CTRL_GAINS[2],-self.CTRL_GAINS[2],self.CTRL_GAINS[2], self.CTRL_GAINS[2]],
+                           [self.CTRL_GAINS[3],self.CTRL_GAINS[3],self.CTRL_GAINS[3],self.CTRL_GAINS[3]]])
 
         pwm2rpm = URDF_TREE.find("control/pwm/pwm2rpm")
         # PWM2RPM_SCALE = float(pwm2rpm.attrib['scale'])

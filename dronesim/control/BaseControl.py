@@ -65,7 +65,8 @@ class BaseControl(object):
                                 target_pos,
                                 target_rpy=np.zeros(3),
                                 target_vel=np.zeros(3),
-                                target_rpy_rates=np.zeros(3)
+                                target_rpy_rates=np.zeros(3),
+                                current_wind = np.zeros(6)
                                 ):
         """Interface method using `computeControl`.
 
@@ -88,7 +89,7 @@ class BaseControl(object):
             (3,1)-shaped array of floats containing the desired roll, pitch, and yaw rates.
 
         """
-        return self.computeControl(control_timestep=control_timestep,
+        return self.computeControl_hybrid(control_timestep=control_timestep,
                                    cur_pos=state[0:3],
                                    cur_quat=state[3:7],
                                    cur_vel=state[10:13],
@@ -96,7 +97,8 @@ class BaseControl(object):
                                    target_pos=target_pos,
                                    target_rpy=target_rpy,
                                    target_vel=target_vel,
-                                   target_rpy_rates=target_rpy_rates
+                                   target_rpy_rates=target_rpy_rates,
+                                   current_wind=np.zeros(6)
                                    )
 
     ################################################################################
