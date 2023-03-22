@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--obstacles',          default=False,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
     parser.add_argument('--simulation_freq_hz', default=240,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
     parser.add_argument('--control_freq_hz',    default=96,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--duration_sec',       default=25,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
+    parser.add_argument('--duration_sec',       default=15,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
     ARGS = parser.parse_args()
 
     #### Initialize the simulation #############################
@@ -56,14 +56,20 @@ if __name__ == "__main__":
     INIT_XYZS = np.array([[0., 0., 40.]])
 
     ## To forward X ###
-    #INIT_RPYS = np.array([[0, np.radians(270), 0]])
-    #INIT_VELS = np.array([[0., 0., 6]])
     INIT_RPYS = np.array([[0, 0, 0]])
-    INIT_VELS = np.array([[18, 0., -1]])
+    INIT_VELS = np.array([[20, 0., 0]])
 
     #### Initialize a circular trajectory ######################
     PERIOD = 15
     NUM_WP = ARGS.control_freq_hz*PERIOD
+    trajectory_setpoints = np.array([
+                                    [150, 0, 40],
+                                    [270, 40, 40],
+                                    [390, 100, 40],
+                                    [510, 40, 40],
+                                    [150,  40, 40]
+                                    ])
+    ARRIVED_AT_WAYPOINT = 15
 
     # Two options of trajectory
     TARGET_POS = np.zeros((NUM_WP,3))+ np.array([0,0,20])
@@ -121,7 +127,7 @@ if __name__ == "__main__":
     wind = WindSimulation(1 / ARGS.simulation_freq_hz)
     #### Run the simulation ####################################
     CTRL_EVERY_N_STEPS = int(np.floor(env.SIM_FREQ/ARGS.control_freq_hz))
-    action = {str(i): np.array([.8, .8, .8, .8]) for i in range(ARGS.num_drones)}
+    action = {str(i): np.array([1., 1., 1., 1.]) for i in range(ARGS.num_drones)}
 
     START = time.time()
     #p.resetDebugVisualizerCamera(cameraDistance=20,
@@ -138,19 +144,25 @@ if __name__ == "__main__":
         #### Compute control at the desired frequency ##############
         if i%CTRL_EVERY_N_STEPS == 0:
 
+            x, y, z, = obs[str(0)]["state"][0:3]
+            target_pos = trajectory_setpoints[0]
+            diff = target_pos - np.array([x,y,z])
+            diff_norm = np.linalg.norm(diff)
+            if diff_norm < ARRIVED_AT_WAYPOINT:
+                trajectory_setpoints = np.delete(trajectory_setpoints,0,0)
+                target_pos = trajectory_setpoints[0]
+            #print(x, y, target_pos)
+
             #### Compute control for the current way point #############
             for j in range(ARGS.num_drones):
                 action[str(j)], _, _ = ctrl[j].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
                                                                        state=obs[str(j)]["state"],
-                                                                       target_pos= np.array([500,20,40]),##TARGET_POS[wp_counters[j]],
-                                                                       target_vel=np.array([0,0,0]),
+                                                                       target_pos= target_pos,##TARGET_POS[wp_counters[j]],
+                                                                       target_vel=np.array([18,0,0]),
                                                                        current_wind = current_wind)
                 # Over-write the action
                 #action[str(j)] = np.array([1.,1.,1.,1.])
 
-            #### Go to the next way point and loop #####################
-            for j in range(ARGS.num_drones):
-                wp_counters[j] = wp_counters[j] + 1 if wp_counters[j] < (NUM_WP-1) else 0
 
         #### Camera View follows the vehicle #######################
         if i%(CTRL_EVERY_N_STEPS*1) == 0:

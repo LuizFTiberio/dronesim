@@ -362,10 +362,15 @@ class INDIControl(BaseControl):
 
         """
         self.control_counter += 1
+
+        nav_carrot = self._WayPointNavigation(control_timestep,
+                                              cur_pos,
+                                              target_pos)
+
         gi_speed_sp = self._compute_guidance_indi_run_pos(control_timestep,
                                cur_pos,
                                cur_vel,
-                               target_pos,
+                               nav_carrot,
                                target_vel)
 
         sp_accel = self._compute_accel_from_speed_sp(control_timestep, cur_quat, cur_vel, gi_speed_sp,
@@ -375,7 +380,7 @@ class INDIControl(BaseControl):
                                                                      cur_pos,
                                                                      cur_quat,
                                                                      cur_vel,
-                                                                     target_pos,
+                                                                     nav_carrot,
                                                                      target_rpy,
                                                                      target_vel,
                                                                      sp_accel)
@@ -614,7 +619,6 @@ class INDIControl(BaseControl):
         indi_du = np.dot(np.linalg.pinv(self.G1),indi_v)
         self.cmd += indi_du
         self.cmd = np.clip(self.cmd, self.MIN_PWM, self.MAX_PWM) # command in PWM
-        print(self.cmd)
 
         return self.cmd #self.rpm_of_pwm(self.cmd)
     
@@ -742,7 +746,7 @@ class INDIControl(BaseControl):
 
         # Coordinated turn
         # Feedforward estimate angular rotation omega = g*tan(phi)/v
-        max_phi = np.radians(30.)
+        max_phi = np.radians(40.)
 
         # We are dividing by the airspeed, so a lower bound is important
         airspeed_turn = np.clip(np.linalg.norm(cur_vel),10,30)
@@ -864,7 +868,7 @@ class INDIControl(BaseControl):
 
         """
         guidance_indi_max_airspeed = 25
-        heading_bank_gain =8
+        heading_bank_gain = 3
         speed_gain =self.guidance_indi_speed_gain
         speed_gainz = self.guidance_indi_speed_gain*0.8
 
@@ -933,5 +937,50 @@ class INDIControl(BaseControl):
             accel_sp[2] = np.clip(accel_sp[2], -3.0, 3.0)
 
         return accel_sp
+
+
+
+    def _WayPointNavigation(self,control_timestep,cur_pos,target_pos):
+
+        """ENAC generic wp navigation
+
+        Parameters
+        ----------
+        control_timestep : float
+            The time step at which control is computed.
+        cur_pos : ndarray
+            (3,1)-shaped array of floats containing the current position.
+        cur_quat : ndarray
+            (4,1)-shaped array of floats containing the current orientation as a quaternion.
+        cur_vel : ndarray
+            (3,1)-shaped array of floats containing the current velocity.
+        target_pos : ndarray
+            (3,1)-shaped array of floats containing the desired position.
+        target_rpy : ndarray
+            (3,1)-shaped array of floats containing the desired orientation as roll, pitch, yaw.
+        target_vel : ndarray
+            (3,1)-shaped array of floats containing the desired velocity.
+
+        Returns
+        -------
+        float
+            The target thrust along the drone z-axis.
+        ndarray
+            (3,1)-shaped array of floats containing the target roll, pitch, and yaw.
+        float
+            The current position error.
+
+        """
+        CLOSE_TO_WAYPOINT = 15
+        NAV_CARROT_DIST = 12
+        path_to_waypoint = target_pos - cur_pos
+        path_to_waypoint = np.clip(path_to_waypoint,-150,150)
+        dist_to_waypoint = np.linalg.norm(path_to_waypoint)
+        if (dist_to_waypoint < CLOSE_TO_WAYPOINT):
+            nav_carrot = target_pos
+        else:
+            path_to_carrot= path_to_waypoint * NAV_CARROT_DIST/dist_to_waypoint
+            nav_carrot = target_pos + path_to_carrot
+        return nav_carrot
 
 #EOF
