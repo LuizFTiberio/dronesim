@@ -362,7 +362,6 @@ class INDIControl(BaseControl):
 
         """
         self.control_counter += 1
-
         gi_speed_sp = self._compute_guidance_indi_run_pos(control_timestep,
                                cur_pos,
                                cur_vel,
@@ -386,9 +385,7 @@ class INDIControl(BaseControl):
                                           cur_quat,
                                           cur_ang_vel,
                                           computed_target_rpy)
-        airspeed = np.linalg.norm(cur_vel)
-        cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
-        phi, theta, psi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
+
         return rpm, 0. ,0.
 
     
@@ -617,7 +614,7 @@ class INDIControl(BaseControl):
         indi_du = np.dot(np.linalg.pinv(self.G1),indi_v)
         self.cmd += indi_du
         self.cmd = np.clip(self.cmd, self.MIN_PWM, self.MAX_PWM) # command in PWM
-
+        print(self.cmd)
 
         return self.cmd #self.rpm_of_pwm(self.cmd)
     
@@ -745,7 +742,7 @@ class INDIControl(BaseControl):
 
         # Coordinated turn
         # Feedforward estimate angular rotation omega = g*tan(phi)/v
-        max_phi = np.radians(60.)
+        max_phi = np.radians(30.)
 
         # We are dividing by the airspeed, so a lower bound is important
         airspeed_turn = np.clip(np.linalg.norm(cur_vel),10,30)
@@ -771,14 +768,13 @@ class INDIControl(BaseControl):
         else :
             # max 60 degrees roll
             coordinated_turn_cond = 1 if coordinated_turn_roll> 0 else -1
-            omega = 9.81 / airspeed_turn * 1.72305 * (2*coordinated_turn_cond)
+            omega = 9.81 / airspeed_turn * np.tan(max_phi) * (coordinated_turn_cond)
 
         guidance_indi_hybrid_heading_sp = psi
-        guidance_indi_hybrid_heading_sp += omega / 240
+        guidance_indi_hybrid_heading_sp += omega / 96
         guidance_indi_hybrid_heading_sp = normalize_angle(guidance_indi_hybrid_heading_sp)
         guidance_euler_cmd[2] = guidance_indi_hybrid_heading_sp
 
-        #print(np.degrees(guidance_euler_cmd),np.degrees(np.array([phi,theta,psi])))
 
         return thrust, guidance_euler_cmd
 
@@ -868,9 +864,9 @@ class INDIControl(BaseControl):
 
         """
         guidance_indi_max_airspeed = 25
-        heading_bank_gain = 2
+        heading_bank_gain =8
         speed_gain =self.guidance_indi_speed_gain
-        speed_gainz = self.guidance_indi_speed_gain*1.5
+        speed_gainz = self.guidance_indi_speed_gain*0.8
 
         cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
         phi, theta, psi = cur_rpy[0], cur_rpy[1], cur_rpy[2]

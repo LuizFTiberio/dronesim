@@ -125,7 +125,7 @@ while 1:
     # AERO MOMENTS
     p.applyExternalTorque(vehicle,
                             1,
-                            torqueObj=[0, 0, servo2],
+                            torqueObj=[0, servo2, 0],
                             flags=p.LINK_FRAME,
                             physicsClientId=physicsClient
                             )

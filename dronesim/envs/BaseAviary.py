@@ -1144,10 +1144,10 @@ class BaseAviary(gym.Env):
         p,q,r = self.ang_v[nth_drone, :]
         drone = self.drones[nth_drone]
 
-        cmd_m1 = cmd[0] * (900) + 200
-        cmd_m2 = cmd[1] * (900) + 200
-        cmd_m3 = cmd[2] * (900) + 200
-        cmd_m4 = cmd[3] * (900) + 200
+        cmd_m1 = cmd[0] * (2800) + 200
+        cmd_m2 = cmd[1] * (2800) + 200
+        cmd_m3 = cmd[2] * (2800) + 200
+        cmd_m4 = cmd[3] * (2800) + 200
 
         # small hack to avoid smt to print everything all the time
         sys.stdout = open(os.devnull, 'w')
@@ -1208,12 +1208,13 @@ class BaseAviary(gym.Env):
                     drone.Cn_r * r * drone.Bref / (2 * Va) +
                     drone.Cn_del_a * cmd_aileron + drone.Cn_del_r * cmd_rudder)
 
+
         # Apply the forces and moments
         # [0,0,0] - first term positive moves front (in x),second term positive moves left (in the y axis) positive third term is point up
         #AERO FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                -1,
-                               forceObj=[F_drag, Fy, -F_lift],
+                               forceObj=[F_drag, Fy, -F_lift*2],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
@@ -1231,6 +1232,7 @@ class BaseAviary(gym.Env):
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                1,
                                forceObj=[T1*np.cos(np.radians(drone.angle_deg)), 0., -T1*np.sin(np.radians(drone.angle_deg))],
+                               #forceObj=[T1 * np.cos(np.radians(drone.angle_deg)), 0.,0],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
@@ -1248,6 +1250,7 @@ class BaseAviary(gym.Env):
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                2,
                                forceObj=[T2*np.cos(np.radians(drone.angle_deg)), 0., T2*np.sin(np.radians(drone.angle_deg))],
+                               #forceObj=[T2 * np.cos(np.radians(drone.angle_deg)), 0.,0],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
@@ -1265,6 +1268,7 @@ class BaseAviary(gym.Env):
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                3,
                                forceObj=[T3*np.cos(np.radians(drone.angle_deg)), 0., -T3*np.sin(np.radians(drone.angle_deg))],
+                               #forceObj=[T3 * np.cos(np.radians(drone.angle_deg)), 0.,0],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
@@ -1282,6 +1286,7 @@ class BaseAviary(gym.Env):
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                4,
                                forceObj=[T4*np.cos(np.radians(drone.angle_deg)), 0., T4*np.sin(np.radians(drone.angle_deg))],
+                               #forceObj=[T4 * np.cos(np.radians(drone.angle_deg)), 0.,0],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
