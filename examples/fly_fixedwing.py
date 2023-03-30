@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--obstacles',          default=False,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
     parser.add_argument('--simulation_freq_hz', default=240,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
     parser.add_argument('--control_freq_hz',    default=96,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--duration_sec',       default=15,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
+    parser.add_argument('--duration_sec',       default=10,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
     ARGS = parser.parse_args()
 
     #### Initialize the simulation #############################
@@ -53,35 +53,29 @@ if __name__ == "__main__":
     R = .6
     AGGR_PHY_STEPS = int(ARGS.simulation_freq_hz/ARGS.control_freq_hz) if ARGS.aggregate else 1
 
-    INIT_XYZS = np.array([[0., 0., 40.]])
+    INIT_XYZS = np.array([[0., 0., 40]])
 
     ## To forward X ###
     INIT_RPYS = np.array([[0, 0, 0]])
-    INIT_VELS = np.array([[20, 0., 0]])
+    INIT_VELS = np.array([[18, 0., 0]])
 
     #### Initialize a circular trajectory ######################
     PERIOD = 15
     NUM_WP = ARGS.control_freq_hz*PERIOD
     trajectory_setpoints = np.array([
-                                    [150, 0, 40],
-                                    [270, 40, 40],
-                                    [390, 100, 40],
-                                    [510, 40, 40],
-                                    [150,  40, 40]
+                                    [230, 0, 40],
+                                    [500, 0, 40],
+                                    #[210, 90, 40],
+                                    #[130, 120, 40],
+                                    #[50,  160, 40]
                                     ])
-    ARRIVED_AT_WAYPOINT = 15
+    ARRIVED_AT_WAYPOINT = 5
 
     # Two options of trajectory
     TARGET_POS = np.zeros((NUM_WP,3))+ np.array([0,0,20])
     for i in range(1,NUM_WP):
         TARGET_POS[i, :] = TARGET_POS[i-1, :] + (25/ARGS.control_freq_hz,0,0) # to ensure 15m in 1 sec
     wp_counters = np.array([int((i*NUM_WP/6)%NUM_WP) for i in range(ARGS.num_drones)])
-
-    #TARGET_POS = np.zeros((NUM_WP, 3))
-    #for i in range(NUM_WP):
-    #    TARGET_POS[i, :] = R * np.cos((i / NUM_WP) * (4 * np.pi) + np.pi / 2) + INIT_XYZS[0, 0], R * np.sin(
-    #        (i / NUM_WP) * (4 * np.pi) + np.pi / 2) - R + INIT_XYZS[0, 1], 20
-    #wp_counters = np.array([int((i * NUM_WP / 6) % NUM_WP) for i in range(ARGS.num_drones)])
 
     #### Create the environment with or without video capture ##
     if ARGS.vision:
@@ -127,15 +121,10 @@ if __name__ == "__main__":
     wind = WindSimulation(1 / ARGS.simulation_freq_hz)
     #### Run the simulation ####################################
     CTRL_EVERY_N_STEPS = int(np.floor(env.SIM_FREQ/ARGS.control_freq_hz))
-    action = {str(i): np.array([1., 1., 1., 1.]) for i in range(ARGS.num_drones)}
+    action = {str(i): np.array([.95,.95,.95,.95]) for i in range(ARGS.num_drones)}
 
     START = time.time()
-    #p.resetDebugVisualizerCamera(cameraDistance=20,
-    #                             cameraYaw=-30,
-    #                             cameraPitch=-30,
-    #                             cameraTargetPosition=[30, 0, 40],
-    #                             physicsClientId=PYB_CLIENT
-    #                             )
+
     for i in range(0, int(ARGS.duration_sec*env.SIM_FREQ), AGGR_PHY_STEPS):
         current_wind = wind.update()
         #### Step the simulation ###################################
@@ -151,7 +140,8 @@ if __name__ == "__main__":
             if diff_norm < ARRIVED_AT_WAYPOINT:
                 trajectory_setpoints = np.delete(trajectory_setpoints,0,0)
                 target_pos = trajectory_setpoints[0]
-            #print(x, y, target_pos)
+                print("VISITED")
+            #print(x,y,target_pos)
 
             #### Compute control for the current way point #############
             for j in range(ARGS.num_drones):
@@ -161,7 +151,7 @@ if __name__ == "__main__":
                                                                        target_vel=np.array([18,0,0]),
                                                                        current_wind = current_wind)
                 # Over-write the action
-                #action[str(j)] = np.array([1.,1.,1.,1.])
+                #action[str(j)] = np.array([.95,.95,.95,.95])
 
 
         #### Camera View follows the vehicle #######################

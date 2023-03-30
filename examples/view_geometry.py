@@ -100,7 +100,8 @@ else:
     p.setTimeStep(0.03, physicsClientId=physicsClient)
 
 # p.resetDebugVisualizerCamera( cameraDistance=10, cameraYaw=10, cameraPitch=-20, cameraTargetPosition=[0.0, 0.0, 0.25])
-p.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=-80, cameraPitch=-30, cameraTargetPosition=[0.0, 0.0, 0.0])
+p.resetDebugVisualizerCamera(cameraDistance=3, cameraYaw=0, cameraPitch=0, cameraTargetPosition=[0.0, 0.0, 0.0])
+
 
 while 1:
     servo1 = p.readUserDebugParameter(servo1Id)
