@@ -383,6 +383,9 @@ class INDIControl(BaseControl):
 
         """
         self.control_counter += 1
+        #print(self.control_counter)
+        #if self.control_counter == 2355:
+        #    print('debug')
 
         nav_carrot = self._WayPointNavigation(control_timestep,
                                               cur_pos,
@@ -678,7 +681,7 @@ class INDIControl(BaseControl):
             The current position error.
 
         """
-        K_beta = 0.3
+        K_beta = 6
         cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
         rphi, rtheta, rpsi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
 
@@ -809,9 +812,9 @@ class INDIControl(BaseControl):
             # max 60 degrees roll
             omega = 9.81 * np.tan(max_phi) * np.sign(phi) / airspeed_turn
 
-        guidance_indi_hybrid_heading_sp = psi + (K_beta * beta + omega)/96
+        guidance_indi_hybrid_heading_sp = psi + (omega - K_beta * beta)/96
         guidance_indi_hybrid_heading_sp = normalize_angle(guidance_indi_hybrid_heading_sp)
-        guidance_euler_cmd[2] = guidance_indi_hybrid_heading_sp
+        guidance_euler_cmd[2] = -guidance_indi_hybrid_heading_sp
 
         # now we correct the angles again
         guidance_euler_cmd[1] = guidance_euler_cmd[1] + np.radians(90)
@@ -904,7 +907,7 @@ class INDIControl(BaseControl):
 
         """
         guidance_indi_max_airspeed = 25
-        heading_bank_gain = 7
+        heading_bank_gain = 4
         speed_gain =self.guidance_indi_speed_gain
         speed_gainz = self.guidance_indi_speed_gain*0.8
 

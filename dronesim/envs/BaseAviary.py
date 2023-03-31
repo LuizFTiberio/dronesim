@@ -1217,7 +1217,6 @@ class BaseAviary(gym.Env):
         if  np.abs(cur_rpy[2]) >= np.pi * 0.9:
             Mx *= -1
 
-
         #AERO FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                0,

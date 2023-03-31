@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--obstacles',          default=False,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
     parser.add_argument('--simulation_freq_hz', default=240,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
     parser.add_argument('--control_freq_hz',    default=96,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--duration_sec',       default=10,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
+    parser.add_argument('--duration_sec',       default=18,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
     ARGS = parser.parse_args()
 
     #### Initialize the simulation #############################
@@ -53,18 +53,18 @@ if __name__ == "__main__":
     R = .6
     AGGR_PHY_STEPS = int(ARGS.simulation_freq_hz/ARGS.control_freq_hz) if ARGS.aggregate else 1
 
-    INIT_XYZS = np.array([[0., 0., 40]])
+    INIT_XYZS = np.array([[-50., -30., 40]])
 
     ## To forward X ###
-    INIT_RPYS = np.array([[0, 0, np.radians(180)]])
-    INIT_VELS = np.array([[-18, 0., 0]])
+    INIT_RPYS = np.array([[0, 0, 0]])
+    INIT_VELS = np.array([[18, 0., 0]])
 
     #### Initialize a circular trajectory ######################
     PERIOD = 15
     NUM_WP = ARGS.control_freq_hz*PERIOD
     trajectory_setpoints = np.array([
-                                    [-50, 0, 40],
-                                    [-180, 0, 40],
+                                    [-50, 70, 40],
+                                    #[-50, 20, 40],
                                     #[120, 40, 40],
                                     #[130, 120, 40],
                                     #[50,  160, 40]

@@ -11,7 +11,6 @@
       <change beforePath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/examples/fly_fixedwing.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/fly_fixedwing.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/examples/view_FalconGeometry.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/view_FalconGeometry.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/examples/view_geometry.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/view_geometry.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

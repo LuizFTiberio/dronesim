@@ -45,7 +45,7 @@ textureId = p.loadTexture("checker_grid.jpg")
 
 vehicleStartPos = [0, 0, 1]
 #vehicleStartOrientation = p.getQuatern ionFromEuler([0,np.radians(-90),0])
-vehicleStartOrientation = p.getQuaternionFromEuler([np.radians(20),0, np.radians(178)])
+vehicleStartOrientation = p.getQuaternionFromEuler([np.radians(20),0, 0])
 #vehicleStartOrientation = p.getQuaternionFromEuler([0,0, 0])
 
 servo1Id = p.addUserDebugParameter("serv1", -1.5, 1.5, 0)
@@ -119,7 +119,7 @@ while 1:
     #                     )
     p.applyExternalTorque(vehicle,
                             0,
-                            torqueObj=[ 0,servo2/1500, 0],
+                            torqueObj=[ 0,0, servo2/1500],
                             flags=p.LINK_FRAME,
                             physicsClientId=physicsClient
                             )
