@@ -56,16 +56,16 @@ if __name__ == "__main__":
     INIT_XYZS = np.array([[0., 0., 40]])
 
     ## To forward X ###
-    INIT_RPYS = np.array([[0, 0, 0]])
-    INIT_VELS = np.array([[18, 0., 0]])
+    INIT_RPYS = np.array([[0, 0, np.radians(180)]])
+    INIT_VELS = np.array([[-18, 0., 0]])
 
     #### Initialize a circular trajectory ######################
     PERIOD = 15
     NUM_WP = ARGS.control_freq_hz*PERIOD
     trajectory_setpoints = np.array([
-                                    [230, 0, 40],
-                                    [500, 0, 40],
-                                    #[210, 90, 40],
+                                    [-50, 0, 40],
+                                    [-180, 0, 40],
+                                    #[120, 40, 40],
                                     #[130, 120, 40],
                                     #[50,  160, 40]
                                     ])
@@ -140,7 +140,7 @@ if __name__ == "__main__":
             if diff_norm < ARRIVED_AT_WAYPOINT:
                 trajectory_setpoints = np.delete(trajectory_setpoints,0,0)
                 target_pos = trajectory_setpoints[0]
-                print("VISITED")
+                print("SETPOINT VISITED. UPDATING TO :", trajectory_setpoints[0] )
             #print(x,y,target_pos)
 
             #### Compute control for the current way point #############

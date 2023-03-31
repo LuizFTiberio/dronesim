@@ -383,8 +383,6 @@ class INDIControl(BaseControl):
 
         """
         self.control_counter += 1
-        if self.control_counter == 67:
-            print('debug')
 
         nav_carrot = self._WayPointNavigation(control_timestep,
                                               cur_pos,
@@ -409,8 +407,6 @@ class INDIControl(BaseControl):
                                                                      sp_accel,
                                                                      current_wind)
 
-        #print(sp_accel[1],np.degrees(computed_target_rpy[0]),self.control_counter)
-        #computed_target_rpy[0] = 0
         rpm = self._INDIAttitudeControl(control_timestep,
                                           thrust,
                                           cur_quat,
@@ -586,16 +582,12 @@ class INDIControl(BaseControl):
             (actuator_nr,1)-shaped array of integers containing the RPMs to apply to each of the 4 motors.
 
         """
-        # calculate quat attitude error q_err = q2 (hamilton product) inverse(q1)
-        # https://math.stackexchange.com/questions/3572459/how-to-compute-the-orientation-error-between-two-3d-coordinate-frames
-        # int32_quat_inv_comp(&att_err, att_quat, &quat_sp) # from Paparazzi !
-
         cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
-        rphi, rtheta, rpsi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
-        theta = -np.radians(90) - rtheta
-        phi = rphi
-        psi = -rpsi
         att_err = target_euler - cur_rpy
+        if  att_err[2] >= 2*np.pi * 0.9:
+            att_err[2] -= 2*np.pi
+        elif att_err[2] <= -2*np.pi * 0.9:
+             att_err[2] += 2*np.pi
 
 
         # local variable to compute rate setpoints based on attitude error
@@ -686,7 +678,7 @@ class INDIControl(BaseControl):
             The current position error.
 
         """
-        K_beta = .5
+        K_beta = 0.3
         cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
         rphi, rtheta, rpsi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
 
@@ -779,7 +771,7 @@ class INDIControl(BaseControl):
         guidance_euler_cmd[1] = theta + euler_cmd[1]
 
         # Bound euler angles to prevent flipping
-        guidance_euler_cmd[0] = np.clip(guidance_euler_cmd[0], -max_phi, max_phi) + phi
+        guidance_euler_cmd[0] = np.clip(guidance_euler_cmd[0], -max_phi, max_phi)
         guidance_euler_cmd[1] = np.clip(guidance_euler_cmd[1], np.radians(-120), np.radians(25))
 
 
@@ -817,7 +809,7 @@ class INDIControl(BaseControl):
             # max 60 degrees roll
             omega = 9.81 * np.tan(max_phi) * np.sign(phi) / airspeed_turn
 
-        guidance_indi_hybrid_heading_sp = psi + (omega - K_beta * beta)/ 96
+        guidance_indi_hybrid_heading_sp = psi + (K_beta * beta + omega)/96
         guidance_indi_hybrid_heading_sp = normalize_angle(guidance_indi_hybrid_heading_sp)
         guidance_euler_cmd[2] = guidance_indi_hybrid_heading_sp
 
@@ -912,7 +904,7 @@ class INDIControl(BaseControl):
 
         """
         guidance_indi_max_airspeed = 25
-        heading_bank_gain = 5
+        heading_bank_gain = 7
         speed_gain =self.guidance_indi_speed_gain
         speed_gainz = self.guidance_indi_speed_gain*0.8
 
@@ -960,7 +952,7 @@ class INDIControl(BaseControl):
             speed_sp_b_x = np.minimum(norm_des_as, guidance_indi_max_airspeed)
             # calculate accel sp in body axes, because we need to regulate airspeed
             sp_accel_b = np.zeros(3)
-            sp_accel_b[1] = np.arctan2(desired_airspeed[1], desired_airspeed[0])# - psi
+            sp_accel_b[1] = np.arctan2(desired_airspeed[1], desired_airspeed[0]) - psi
             sp_accel_b[1] = normalize_angle(sp_accel_b[1]) * heading_bank_gain
             sp_accel_b[0] = (speed_sp_b_x - airspeed) * speed_gain
 

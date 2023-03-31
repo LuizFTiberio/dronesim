@@ -44,7 +44,7 @@ planeId = p.loadURDF("plane.urdf")
 textureId = p.loadTexture("checker_grid.jpg")
 
 vehicleStartPos = [0, 0, 1]
-vehicleStartOrientation = p.getQuaternionFromEuler([0, np.pi/2, 0])
+vehicleStartOrientation = p.getQuaternionFromEuler([0, np.pi/2, np.radians(-20)])
 
 servo1Id = p.addUserDebugParameter("serv1", -1.5, 1.5, 0)
 servo2Id = p.addUserDebugParameter("serv2", -15, 15, 0)

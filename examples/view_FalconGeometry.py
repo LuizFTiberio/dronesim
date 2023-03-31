@@ -44,8 +44,9 @@ planeId = p.loadURDF("plane.urdf")
 textureId = p.loadTexture("checker_grid.jpg")
 
 vehicleStartPos = [0, 0, 1]
-#vehicleStartOrientation = p.getQuaternionFromEuler([0,np.radians(-90),0])
-vehicleStartOrientation = p.getQuaternionFromEuler([0,np.radians(0), 0])
+#vehicleStartOrientation = p.getQuatern ionFromEuler([0,np.radians(-90),0])
+vehicleStartOrientation = p.getQuaternionFromEuler([np.radians(20),0, np.radians(178)])
+#vehicleStartOrientation = p.getQuaternionFromEuler([0,0, 0])
 
 servo1Id = p.addUserDebugParameter("serv1", -1.5, 1.5, 0)
 servo2Id = p.addUserDebugParameter("serv2", -0.3, 0.3, 0)
@@ -53,7 +54,7 @@ servo2Id = p.addUserDebugParameter("serv2", -0.3, 0.3, 0)
 # boxId = p.loadURDF("r2d2.urdf", cubeStartPos, cubeStartOrientation)
 # boxId = p.loadURDF("cartpole.urdf", cubeStartPos, cubeStartOrientation)
 # boxId = p.loadURDF("pole.urdf", cubeStartPos, cubeStartOrientation)
-vehicle = p.loadURDF("../dronesim/assets/Falcon_debug.urdf", vehicleStartPos, vehicleStartOrientation)
+vehicle = p.loadURDF("../dronesim/assets/Falcon.urdf", vehicleStartPos, vehicleStartOrientation)
 v_Pos, v_cubeOrn = p.getBasePositionAndOrientation(vehicle)
 
 useRealTimeSimulation = 0
@@ -116,17 +117,17 @@ while 1:
     #                     flags=p.LINK_FRAME,
     #                     physicsClientId=physicsClient
     #                     )
-    #p.applyExternalTorque(vehicle,
-    #                        0,
-    #                        torqueObj=[ 0,servo2/1500, 0],
-    #                        flags=p.LINK_FRAME,
-    #                        physicsClientId=physicsClient
-    #                        )
+    p.applyExternalTorque(vehicle,
+                            0,
+                            torqueObj=[ 0,servo2/1500, 0],
+                            flags=p.LINK_FRAME,
+                            physicsClientId=physicsClient
+                            )
 
-    #v_Pos, v_cubeOrn = p.getBasePositionAndOrientation(vehicle)
-    #b_cur_rpy = np.array(p.getEulerFromQuaternion(v_cubeOrn))
-    #R_vb = np.array(p.getMatrixFromQuaternion(v_cubeOrn)).reshape(3, 3)
-    #print(np.degrees(b_cur_rpy))
+    v_Pos, v_cubeOrn = p.getBasePositionAndOrientation(vehicle)
+    b_cur_rpy = np.array(p.getEulerFromQuaternion(v_cubeOrn))
+    R_vb = np.array(p.getMatrixFromQuaternion(v_cubeOrn)).reshape(3, 3)
+    print(np.degrees(b_cur_rpy))
 
     #steady_state = current_wind[0:3]
     #gust = current_wind[3:6]
@@ -138,36 +139,37 @@ while 1:
     #wr = v_air_b[2] - wind_body_frame[2]
     #alpha =  np.arctan(wr/ur)
     #print(np.degrees(alpha))
+    #print(p.getBaseVelocity(vehicle))
 
-    T = servo2/5
-    p.applyExternalForce(vehicle,
-                        1,  # link number
-                        forceObj=[T,0 ,0],
-                        posObj=[0, 0, 0],
-                        flags=p.LINK_FRAME,
-                        physicsClientId=physicsClient
-                        )
-    p.applyExternalForce(vehicle,
-                        2,  # link number
-                        forceObj=[T,0 ,0],
-                        posObj=[0, 0, 0],
-                        flags=p.LINK_FRAME,
-                        physicsClientId=physicsClient
-                        )
-    p.applyExternalForce(vehicle,
-                        3,  # link number
-                        forceObj=[T/1.1,0 ,0],
-                        posObj=[0, 0, 0],
-                        flags=p.LINK_FRAME,
-                        physicsClientId=physicsClient
-                        )
-    p.applyExternalForce(vehicle,
-                        4,  # link number
-                        forceObj=[T/1.1,0 ,0],
-                        posObj=[0, 0, 0],
-                        flags=p.LINK_FRAME,
-                        physicsClientId=physicsClient
-                        )
+    #T = servo2/5
+    #p.applyExternalForce(vehicle,
+    #                    1,  # link number
+    #                    forceObj=[T,0 ,0],
+    #                    posObj=[0, 0, 0],
+    #                    flags=p.LINK_FRAME,
+    #                    physicsClientId=physicsClient
+    #                    )
+    #p.applyExternalForce(vehicle,
+    #                    2,  # link number
+    #                    forceObj=[T,0 ,0],
+    #                    posObj=[0, 0, 0],
+    #                    flags=p.LINK_FRAME,
+    #                    physicsClientId=physicsClient
+    #                    )
+    #p.applyExternalForce(vehicle,
+    #                    3,  # link number
+    #                    forceObj=[T,0 ,0],
+    #                    posObj=[0, 0, 0],
+    #                    flags=p.LINK_FRAME,
+    #                    physicsClientId=physicsClient
+    #                    )
+    #p.applyExternalForce(vehicle,
+    #                    4,  # link number
+    #                    forceObj=[T,0 ,0],
+    #                    posObj=[0, 0, 0],
+    #                    flags=p.LINK_FRAME,
+    #                    physicsClientId=physicsClient
+    #                    )
 
     if not useRealTimeSimulation:
         p.stepSimulation(physicsClientId=physicsClient)
