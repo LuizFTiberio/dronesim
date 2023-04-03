@@ -94,9 +94,9 @@ def jac_vec_quat(vec,q):
 
 def normalize_angle(angle):
     if angle > np.pi:
-        angle -= 2 * np.pi
+        angle -=  np.pi
     if angle < -np.pi:
-        angle += 2 * np.pi
+        angle +=  np.pi
     return angle
 
 
@@ -384,8 +384,9 @@ class INDIControl(BaseControl):
         """
         self.control_counter += 1
         #print(self.control_counter)
-        #if self.control_counter == 2355:
-        #    print('debug')
+
+        if self.control_counter ==  1500:
+            print('debug')
 
         nav_carrot = self._WayPointNavigation(control_timestep,
                                               cur_pos,
@@ -409,6 +410,9 @@ class INDIControl(BaseControl):
                                                                      target_vel,
                                                                      sp_accel,
                                                                      current_wind)
+
+
+        print(self.control_counter,gi_speed_sp,sp_accel,np.degrees(computed_target_rpy))
 
         rpm = self._INDIAttitudeControl(control_timestep,
                                           thrust,
@@ -596,9 +600,9 @@ class INDIControl(BaseControl):
         # local variable to compute rate setpoints based on attitude error
         rate_sp = Rate()
 
-        rate_sp.p =  self.indi_gains.att.p * att_err[0]
-        rate_sp.q =  self.indi_gains.att.q * att_err[1]
-        rate_sp.r =  self.indi_gains.att.r * att_err[2]
+        rate_sp.p =  self.indi_gains.att.p * att_err[0] / self.indi_gains.rate.p
+        rate_sp.q =  self.indi_gains.att.q * att_err[1] / self.indi_gains.rate.q
+        rate_sp.r =  self.indi_gains.att.r * att_err[2] / self.indi_gains.rate.r
 
         # Rotate angular velocity to body frame
         R = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
@@ -681,7 +685,7 @@ class INDIControl(BaseControl):
             The current position error.
 
         """
-        K_beta = 6
+        K_beta = 4
         cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
         rphi, rtheta, rpsi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
 
@@ -907,7 +911,7 @@ class INDIControl(BaseControl):
 
         """
         guidance_indi_max_airspeed = 25
-        heading_bank_gain = 4
+        heading_bank_gain = 6
         speed_gain =self.guidance_indi_speed_gain
         speed_gainz = self.guidance_indi_speed_gain*0.8
 
@@ -1018,7 +1022,7 @@ class INDIControl(BaseControl):
             The current position error.
 
         """
-        CLOSE_TO_WAYPOINT = 15
+        CLOSE_TO_WAYPOINT = 5
         NAV_CARROT_DIST = 12
         path_to_waypoint = target_pos - cur_pos
         path_to_waypoint = np.clip(path_to_waypoint,-150,150)

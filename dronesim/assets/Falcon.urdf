@@ -33,18 +33,18 @@
 
   <control>
      <indi actuator_nr="4" output_nr="4" />
-    <indi_1 roll="    450. -450. -450. 450." />
-    <indi_2 pitch="  550.  -550. 550. -550." />
-    <indi_3 yaw="    1000. 1000. -1000. -1000." />
-    <indi_4 thrust=" 600 600 600 600" />
+    <indi_1 roll="   25. -25. -25. 25." />
+    <indi_2 pitch="  350.  -350. 350. -350." />
+    <indi_3 yaw="    1500. 1500. -1500. -1500." />
+    <indi_4 thrust=" 400 400 400 400" />
 
     <indi_guidance_gains>
-      <pos kp="1.6" kd="2"/>
+      <pos kp="1.4" kd="1.8"/>
     </indi_guidance_gains>
 
     <indi_att_gains>
-      <att  p="3" q="7." r="5" />
-      <rate p="7." q="14" r="12." />
+      <att  p="15" q="20." r="25" />
+      <rate p="8." q="8" r="5." />
     </indi_att_gains>
 
     <pwm>

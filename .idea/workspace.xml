@@ -10,7 +10,6 @@
       <change beforePath="$PROJECT_DIR$/dronesim/control/INDIControl.py" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/control/INDIControl.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/examples/fly_fixedwing.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/fly_fixedwing.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/examples/view_FalconGeometry.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/view_FalconGeometry.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -172,11 +171,11 @@
       <method v="2" />
     </configuration>
     <list>
+      <item itemvalue="Python.Exec_simu" />
       <item itemvalue="Python.Run_Drone" />
       <item itemvalue="Python.Run_FixedWing" />
-      <item itemvalue="Python.Exec_simu" />
-      <item itemvalue="Python.optimize_gains" />
       <item itemvalue="Python.geometry" />
+      <item itemvalue="Python.optimize_gains" />
     </list>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
@@ -218,6 +217,11 @@
           <url>file://$PROJECT_DIR$/dronesim/envs/BaseAviary.py</url>
           <line>610</line>
           <option name="timeStamp" value="126" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/dronesim/control/INDIControl.py</url>
+          <line>388</line>
+          <option name="timeStamp" value="131" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
