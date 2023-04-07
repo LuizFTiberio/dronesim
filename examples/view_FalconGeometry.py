@@ -6,6 +6,7 @@ import numpy as np
 from dronesim.utils.wind_simulation import WindSimulation
 # First let's define a class for the JointInfo.
 from dataclasses import dataclass
+from dronesim.control.INDIControl import get_euler_from_quaternion_ZXY
 
 
 @dataclass
@@ -45,7 +46,7 @@ textureId = p.loadTexture("checker_grid.jpg")
 
 vehicleStartPos = [0, 0, 1]
 #vehicleStartOrientation = p.getQuatern ionFromEuler([0,np.radians(-90),0])
-vehicleStartOrientation = p.getQuaternionFromEuler([np.radians(20),0, 0])
+vehicleStartOrientation = p.getQuaternionFromEuler([0,0, 0])
 #vehicleStartOrientation = p.getQuaternionFromEuler([0,0, 0])
 
 servo1Id = p.addUserDebugParameter("serv1", -1.5, 1.5, 0)
@@ -125,8 +126,9 @@ while 1:
                             )
 
     v_Pos, v_cubeOrn = p.getBasePositionAndOrientation(vehicle)
-    b_cur_rpy = np.array(p.getEulerFromQuaternion(v_cubeOrn))
-    R_vb = np.array(p.getMatrixFromQuaternion(v_cubeOrn)).reshape(3, 3)
+    v_cubeOrn = np.array([v_cubeOrn[3],v_cubeOrn[0],v_cubeOrn[1],v_cubeOrn[2]])
+    b_cur_rpy = np.array(get_euler_from_quaternion_ZXY(v_cubeOrn))
+    #R_vb = np.array(p.getMatrixFromQuaternion(v_cubeOrn)).reshape(3, 3)
     print(np.degrees(b_cur_rpy))
 
     #steady_state = current_wind[0:3]
