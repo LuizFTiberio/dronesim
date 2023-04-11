@@ -6,7 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="45128d96-b8a0-4b10-a5f5-590b53edbfa3" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dronesim/assets/Falcon.urdf" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/assets/Falcon.urdf" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/dronesim/control/INDIControl.py" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/control/INDIControl.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/fly_fixedwing.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/fly_fixedwing.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/examples/view_FalconGeometry.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/view_FalconGeometry.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -218,8 +221,8 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/dronesim/control/INDIControl.py</url>
-          <line>484</line>
-          <option name="timeStamp" value="139" />
+          <line>460</line>
+          <option name="timeStamp" value="147" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

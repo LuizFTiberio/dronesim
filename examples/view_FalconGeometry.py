@@ -6,7 +6,7 @@ import numpy as np
 from dronesim.utils.wind_simulation import WindSimulation
 # First let's define a class for the JointInfo.
 from dataclasses import dataclass
-from dronesim.control.INDIControl import get_euler_from_quaternion_ZXY
+from dronesim.control.INDIControl import *
 
 
 @dataclass
@@ -36,8 +36,98 @@ class Joint:
 
 #################################################################################
 
-physicsClient = p.connect(p.GUI)
+def compute_accel_from_speed_sp(
+                               cur_quat,
+                               cur_vel,
+                               gi_speed_sp
+                               ):
 
+        guidance_indi_max_airspeed = 25
+        heading_bank_gain = 6
+        speed_gain =2
+        speed_gainz = speed_gain*0.8
+
+        cur_quat = np.array([cur_quat[3], cur_quat[0], cur_quat[1], cur_quat[2]])
+        cur_rpy = get_euler_from_quaternion_ZXY(cur_quat)
+        rphi, rtheta, rpsi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
+        # For INDI, theta is 0 when hover and -90 in cruise
+        theta = -np.radians(90) - rtheta
+        psi = rpsi
+        phi = rphi
+        cpsi = np.cos(psi)
+        spsi = np.sin(psi)
+        accel_sp = np.zeros(3)
+
+        speed_sp_b_x = cpsi * gi_speed_sp[0] + spsi * gi_speed_sp[1]
+        speed_sp_b_y = -spsi * gi_speed_sp[0] + cpsi * gi_speed_sp[1]
+        airspeed = np.linalg.norm(cur_vel)
+
+        R_vb = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
+        # We now correct R_vb from Pybullet frame to wind frame
+        R_vb = R_vb @ np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
+
+        steady_state = np.zeros(3)
+        gust = np.zeros(3)
+        # convert wind vector from world to body frame and add gust
+        windspeed = R_vb @ steady_state + gust
+        desired_airspeed = gi_speed_sp - windspeed
+        norm_des_as = np.linalg.norm(desired_airspeed)
+
+        if airspeed > 10 and norm_des_as > 12:
+            # turn
+            if norm_des_as > guidance_indi_max_airspeed:
+                groundspeed_factor = 0.0
+                if np.linalg.norm(windspeed) < guidance_indi_max_airspeed:
+                    av = gi_speed_sp[0] * gi_speed_sp[0] + gi_speed_sp[1] * gi_speed_sp[1]
+                    bv = -2. * (windspeed[0] * gi_speed_sp[0] + windspeed[1] * gi_speed_sp[1])
+                    cv = windspeed[0] * windspeed[0] + windspeed[1] * windspeed[
+                        1] - guidance_indi_max_airspeed * guidance_indi_max_airspeed
+                    dv = np.abs(bv * bv - 4.0 * av * cv)
+                    groundspeed_factor = (-bv + np.sqrt(dv)) / (2. * av)
+
+                desired_airspeed[0] = groundspeed_factor * gi_speed_sp[0] - windspeed[0]
+                desired_airspeed[1] = groundspeed_factor * gi_speed_sp[1] - windspeed[1]
+                speed_sp_b_x = guidance_indi_max_airspeed
+
+            # desired airspeed can not be larger than max airspeed
+            speed_sp_b_x = np.minimum(norm_des_as, guidance_indi_max_airspeed)
+            # calculate accel sp in body axes, because we need to regulate airspeed
+            sp_accel_b = np.zeros(3)
+            sp_accel_b[1] = np.arctan2(desired_airspeed[1], desired_airspeed[0]) - psi
+            sp_accel_b[1] = normalize_angle(sp_accel_b[1]) * heading_bank_gain
+            sp_accel_b[0] = (speed_sp_b_x - airspeed) * speed_gain
+
+            accel_sp[0] = cpsi * sp_accel_b[0] - spsi * sp_accel_b[1]
+            accel_sp[1] = spsi * sp_accel_b[0] + cpsi * sp_accel_b[1]
+            accel_sp[2] = (gi_speed_sp[2] - cur_vel[2]) * speed_gainz
+        else:
+            # Go somewhere in the shortest way
+            if airspeed > 10:
+                groundspeed_x = cpsi * cur_vel[0] + spsi * cur_vel[1]
+                speed_increment = speed_sp_b_x - groundspeed_x
+
+                if ((speed_increment + airspeed) > guidance_indi_max_airspeed):
+                    speed_sp_b_x = guidance_indi_max_airspeed + groundspeed_x - airspeed
+
+            gi_speed_sp[0] = cpsi * speed_sp_b_x - spsi * speed_sp_b_y
+            gi_speed_sp[1] = spsi * speed_sp_b_x + cpsi * speed_sp_b_y
+
+            accel_sp[0] = (gi_speed_sp[0] - cur_vel[0]) * speed_gain
+            accel_sp[1] = (gi_speed_sp[1] - cur_vel[1]) * speed_gain
+            accel_sp[2] = (gi_speed_sp[2] - cur_vel[2]) * speed_gainz
+
+            accelbound = 3.0 + airspeed / guidance_indi_max_airspeed * 5.0
+            accel_sp[0] = np.clip(accel_sp[0], -accelbound, accelbound)
+            accel_sp[1] = np.clip(accel_sp[1], -accelbound, accelbound)
+            accel_sp[2] = np.clip(accel_sp[2], -3.0, 3.0)
+
+        return accel_sp
+
+
+
+
+
+physicsClient = p.connect(p.GUI)
 p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
 #p.setGravity(0, 0, -10)
@@ -47,14 +137,10 @@ textureId = p.loadTexture("checker_grid.jpg")
 vehicleStartPos = [0, 0, 1]
 #vehicleStartOrientation = p.getQuatern ionFromEuler([0,np.radians(-90),0])
 vehicleStartOrientation = p.getQuaternionFromEuler([0,0, 0])
-#vehicleStartOrientation = p.getQuaternionFromEuler([0,0, 0])
+#vehicleStartOrientation = p.getQuaternionFromEuler(np.radians([0,0, 72.11131777]))
 
 servo1Id = p.addUserDebugParameter("serv1", -1.5, 1.5, 0)
 servo2Id = p.addUserDebugParameter("serv2", -0.3, 0.3, 0)
-
-# boxId = p.loadURDF("r2d2.urdf", cubeStartPos, cubeStartOrientation)
-# boxId = p.loadURDF("cartpole.urdf", cubeStartPos, cubeStartOrientation)
-# boxId = p.loadURDF("pole.urdf", cubeStartPos, cubeStartOrientation)
 vehicle = p.loadURDF("../dronesim/assets/Falcon.urdf", vehicleStartPos, vehicleStartOrientation)
 v_Pos, v_cubeOrn = p.getBasePositionAndOrientation(vehicle)
 
@@ -120,7 +206,7 @@ while 1:
     #                     )
     p.applyExternalTorque(vehicle,
                             0,
-                            torqueObj=[ 0,0, servo2/1500],
+                            torqueObj=[ 0,servo2/3000,0],
                             flags=p.LINK_FRAME,
                             physicsClientId=physicsClient
                             )
@@ -130,62 +216,12 @@ while 1:
     b_cur_rpy = np.array(get_euler_from_quaternion_ZXY(v_cubeOrn))
     #R_vb = np.array(p.getMatrixFromQuaternion(v_cubeOrn)).reshape(3, 3)
     print(np.degrees(b_cur_rpy))
+    #acc = compute_accel_from_speed_sp(v_cubeOrn,
+    #                                  cur_vel = np.array([0,10,0]),
+    #                                  gi_speed_sp=np.array([0,-10,0]))
+    #print(acc)
 
-    #steady_state = current_wind[0:3]
-    #gust = current_wind[3:6]
-    #wind_body_frame = R_vb @ steady_state + gust
-    #v_air_i = np.array([18, 0, 0])
-    #v_air_b = R_vb.T.dot(v_air_i)
-    #ur = v_air_b[0] - wind_body_frame[0]
-    #vr = v_air_b[1] - wind_body_frame[1]
-    #wr = v_air_b[2] - wind_body_frame[2]
-    #alpha =  np.arctan(wr/ur)
-    #print(np.degrees(alpha))
-    #print(p.getBaseVelocity(vehicle))
-
-    #T = servo2/5
-    #p.applyExternalForce(vehicle,
-    #                    1,  # link number
-    #                    forceObj=[T,0 ,0],
-    #                    posObj=[0, 0, 0],
-    #                    flags=p.LINK_FRAME,
-    #                    physicsClientId=physicsClient
-    #                    )
-    #p.applyExternalForce(vehicle,
-    #                    2,  # link number
-    #                    forceObj=[T,0 ,0],
-    #                    posObj=[0, 0, 0],
-    #                    flags=p.LINK_FRAME,
-    #                    physicsClientId=physicsClient
-    #                    )
-    #p.applyExternalForce(vehicle,
-    #                    3,  # link number
-    #                    forceObj=[T,0 ,0],
-    #                    posObj=[0, 0, 0],
-    #                    flags=p.LINK_FRAME,
-    #                    physicsClientId=physicsClient
-    #                    )
-    #p.applyExternalForce(vehicle,
-    #                    4,  # link number
-    #                    forceObj=[T,0 ,0],
-    #                    posObj=[0, 0, 0],
-    #                    flags=p.LINK_FRAME,
-    #                    physicsClientId=physicsClient
-    #                    )
 
     if not useRealTimeSimulation:
         p.stepSimulation(physicsClientId=physicsClient)
     sleep(0.01)  # Time in seconds.
-
-'''
-Results are:
-Positive MX leads to inverse rolling moment, so MX needs to be negative in the simulation
-Positive MY leads to pitch up, so it's correct
-Positive MZ leads do inverse yaw moment, MZ needs to be negative as well.
-
-M1 (joint 1) is upper left (seeing from the front) or UR in the paper convention
-M2 (joint 2) is lower left (seeing from the front) or LR in the paper convention
-M3 (joint 3) is upper right (seeing from the front) or UL in the paper convention
-M3 (joint 4) is lower right (seeing from the front) or LL in the paper convention
-'''
-

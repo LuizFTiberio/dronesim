@@ -94,9 +94,9 @@ def jac_vec_quat(vec,q):
 
 def normalize_angle(angle):
     if angle > np.pi:
-        angle -=  np.pi
+        angle -=  2*np.pi
     if angle < -np.pi:
-        angle +=  np.pi
+        angle +=  2*np.pi
     return angle
 
 
@@ -457,7 +457,8 @@ class INDIControl(BaseControl):
         """
         self.control_counter += 1
         #print(self.control_counter)
-
+        if self.control_counter == 7:
+            print('stop')
 
         nav_carrot = self._WayPointNavigation(control_timestep,
                                               cur_pos,
@@ -657,7 +658,9 @@ class INDIControl(BaseControl):
             (actuator_nr,1)-shaped array of integers containing the RPMs to apply to each of the 4 motors.
 
         """
-        cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
+        R_pyb = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
+        cur_quat = np.array([cur_quat[3], cur_quat[0], cur_quat[1], cur_quat[2]])
+        cur_rpy = get_euler_from_quaternion_ZXY(cur_quat)
         att_err = target_euler - cur_rpy
         if  att_err[2] >= 2*np.pi * 0.9:
             att_err[2] -= 2*np.pi
@@ -673,8 +676,8 @@ class INDIControl(BaseControl):
         rate_sp.r =  self.indi_gains.att.r * att_err[2] / self.indi_gains.rate.r
 
         # Rotate angular velocity to body frame
-        R = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
-        cur_ang_vel = R.T.dot(cur_ang_vel)
+        cur_ang_vel = R_pyb.T.dot(cur_ang_vel)
+
 
         # Calculate the angular acceleration via finite difference
         if self.control_counter == 1:
@@ -753,66 +756,59 @@ class INDIControl(BaseControl):
             The current position error.
 
         """
-        K_beta = 4
-        cur_rpy = np.array(p.getEulerFromQuaternion(cur_quat))
-        rphi, rtheta, rpsi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
+        K_beta = 7
+        GUIDANCE_INDI_PITCH_EFF_SCALING = 1.0
+        liftd_asq =  0.20
+        liftd_p80 = liftd_asq * 12 * 12
+        liftd_p50 = liftd_p80/2
 
+        cur_quat = np.array([cur_quat[3], cur_quat[0], cur_quat[1], cur_quat[2]])
+        cur_rpy = get_euler_from_quaternion_ZXY(cur_quat)  # np.array(p.getEulerFromQuaternion(cur_quat))
+        rphi, rtheta, rpsi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
         # For INDI, theta is 0 when hover and -90 in cruise
         theta = -np.radians(90) - rtheta
+        psi = rpsi
         phi = rphi
-        psi = -rpsi
+        sphi = np.sin(phi)
+        cphi = np.cos(phi)
+        stheta = np.sin(theta)
+        ctheta = np.cos(theta)
+        spsi = np.sin(psi)
+        cpsi = np.cos(psi)
 
-        crphi = np.cos(phi)
-        srphi = np.sin(phi)
-        crtheta = np.cos(theta)
-        srtheta = np.sin(theta)
-        crpsi = np.cos(psi)
-        srpsi = np.sin(psi)
+        pitch_lift = theta
+        pitch_lift = np.clip(pitch_lift,-np.pi/2,0)
+        lift = np.sin(pitch_lift) * 9.81
+        T = -np.cos(pitch_lift)*9.81
 
-        # Calculate the transition percentage so that the ctrl_effecitveness scheduling works
-        transition_percentage = theta/np.radians(-75) * 100
-        transition_percentage = np.clip(transition_percentage,0,100)
-
-
-        lift = -np.sin(-theta) * 9.8
-        T = -np.cos(theta) * 9.8
+        pitch_interp = np.degrees(theta)
         min_pitch = -80.0
         middle_pitch = -50.0
         max_pitch = -20.0
-        GUIDANCE_INDI_LIFTD_ASQ = 0.20
-        GUIDANCE_INDI_LIFTD_P80 = GUIDANCE_INDI_LIFTD_ASQ * 12 ** 2
-        GUIDANCE_INDI_LIFTD_P50 = GUIDANCE_INDI_LIFTD_P80 / 2
+        pitch_interp = np.clip(pitch_interp,min_pitch,max_pitch)
         airspeed = np.linalg.norm(cur_vel)
-        pitch_interp = np.clip(np.degrees(theta), min_pitch, max_pitch)
-        if airspeed < 12:
-            if pitch_interp > middle_pitch:
+        if (airspeed < 12):
+            if (pitch_interp > middle_pitch):
                 ratio = (pitch_interp - max_pitch) / (middle_pitch - max_pitch)
-                liftd = -GUIDANCE_INDI_LIFTD_P50 * ratio
+                liftd = -liftd_p50*ratio
             else:
                 ratio = (pitch_interp - middle_pitch) / (min_pitch - middle_pitch)
-                liftd = -(GUIDANCE_INDI_LIFTD_P80 - GUIDANCE_INDI_LIFTD_P50) * ratio - GUIDANCE_INDI_LIFTD_P50
+                liftd = -(liftd_p80 - liftd_p50) * ratio - liftd_p50
         else:
-            liftd = -GUIDANCE_INDI_LIFTD_ASQ * airspeed * airspeed
-        # Matrix of partial derivatives for Lift force
-        GUIDANCE_INDI_PITCH_EFF_SCALING = 1.0
+            liftd = -liftd_asq * airspeed * airspeed
 
+        G_0_0 = cphi*ctheta*spsi*T + cphi*spsi*lift
+        G_1_0 = -cphi*ctheta*cpsi*T - cphi*cpsi*lift
+        G_2_0 = -sphi*ctheta*T -sphi*lift
+        G_0_1 = (ctheta*cpsi - sphi*stheta*spsi)*T*GUIDANCE_INDI_PITCH_EFF_SCALING + sphi*spsi*liftd
+        G_1_1 = (ctheta*spsi + sphi*stheta*cpsi)*T*GUIDANCE_INDI_PITCH_EFF_SCALING - sphi*cpsi*liftd
+        G_2_1 = -cphi*stheta*T*GUIDANCE_INDI_PITCH_EFF_SCALING + cphi*liftd
+        G_0_2 = stheta*cpsi + sphi*ctheta*spsi
+        G_1_2 = stheta*spsi - sphi*ctheta*cpsi
+        G_2_2 = cphi*ctheta
 
-        G_0_0 = crphi*crtheta*srpsi*T + crphi*srpsi*lift
-        G_1_0 = -crphi*crtheta*crpsi*T - crphi*crpsi*lift
-        G_2_0 = -srphi*crtheta*T -srphi*lift
-        G_0_1 = (crtheta*crpsi - srphi*srtheta*srpsi)*T*GUIDANCE_INDI_PITCH_EFF_SCALING + srphi*srpsi*liftd
-        G_1_1 = (crtheta*srpsi + srphi*srtheta*crpsi)*T*GUIDANCE_INDI_PITCH_EFF_SCALING - srphi*crpsi*liftd
-        G_2_1 = -crphi*srtheta*T*GUIDANCE_INDI_PITCH_EFF_SCALING + crphi*liftd
-        G_0_2 = srtheta*crpsi + srphi*crtheta*srpsi
-        G_1_2 = srtheta*srpsi - srphi*crtheta*crpsi
-        G_2_2 = crphi*crtheta
-
-        G = np.array([[-G_0_0, G_0_1, -G_0_2],
-                      [-G_1_0, G_1_1, -G_1_2],
-                      [-G_2_0, G_2_1, -G_2_2]])
-
-        # Invert this matrix
-        G_inv = np.linalg.pinv(G)
+        Gmat = np.array([[G_0_0,G_0_1,G_0_2],[G_1_0,G_1_1,G_1_2],[G_2_0,G_2_1,G_2_2]])
+        Gmat_inv = np.linalg.pinv(Gmat)
 
         # Calculate the acceleration via finite difference
         if self.control_counter == 1:
@@ -821,46 +817,39 @@ class INDIControl(BaseControl):
         cur_accel = (cur_vel - self.last_vel) / control_timestep
         self.last_vel = cur_vel
 
-        a_diff = np.zeros(3)
-        a_diff[0] = sp_accel[0] - cur_accel[0]
-        a_diff[1] = sp_accel[1] - cur_accel[1]
-        a_diff[2] = sp_accel[2] - cur_accel[2]
-
-        # Bound the acceleration error so that the linearization still holds
-        a_diff[0] = np.clip(a_diff[0], -6.0, 6.0)
-        a_diff[1] = np.clip(a_diff[1], -6.0, 6.0)
-        a_diff[2] = np.clip(a_diff[2], -9.0, 9.0)
-
-        euler_cmd = G_inv.dot(a_diff)
+        a_diff_x = np.clip(sp_accel[0] - cur_accel[0],-6,6)
+        a_diff_y = np.clip(sp_accel[1] - cur_accel[1],-6,6)
+        a_diff_z = np.clip(sp_accel[2] - cur_accel[2],-9,9)
+        a_diff = np.array([a_diff_x,a_diff_y,a_diff_z])
+        euler_cmd = Gmat_inv.dot(a_diff)
         thrust = euler_cmd[2]
 
-        # Coordinated turn
-        # Feedforward estimate angular rotation omega = g*tan(phi)/v
-        max_phi = np.radians(30.)
-
-        # We are dividing by the airspeed, so a lower bound is important
-        airspeed_turn = np.clip(np.linalg.norm(cur_vel),10,30)
-
+        max_phi = np.radians(35)
+        airspeed_turn = np.clip(airspeed,10,30)
         guidance_euler_cmd = np.zeros(3)
         guidance_euler_cmd[0] = phi + euler_cmd[0]
         guidance_euler_cmd[1] = theta + euler_cmd[1]
 
-        # Bound euler angles to prevent flipping
-        guidance_euler_cmd[0] = np.clip(guidance_euler_cmd[0], -max_phi, max_phi)
+        guidance_euler_cmd[0] = np.clip(guidance_euler_cmd[0],-max_phi,max_phi)
         guidance_euler_cmd[1] = np.clip(guidance_euler_cmd[1], np.radians(-120), np.radians(25))
-
-
-        # Use the current roll angle to determine the corresponding heading rate of change.
         coordinated_turn_roll = phi
 
-        # Sideslip calculation - I'm using simulation knowledge for the actual value
-        R_vb = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
-        # We now correct R_vb from Pybullet frame to wind frame
-        R_vb = R_vb @ np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
+        cond1 = 1 if guidance_euler_cmd[0] > 0 else 0
+        cond2 = 1 if guidance_euler_cmd[0] < 0 else 0
+        if (guidance_euler_cmd[1]>0) and (np.abs(guidance_euler_cmd[0])<guidance_euler_cmd[1]):
+            coordinated_turn_roll = (cond1-cond2) * guidance_euler_cmd[1]
 
+        if np.abs(coordinated_turn_roll)<max_phi:
+            omega = 9.81/ airspeed_turn * np.tan(coordinated_turn_roll)
+        else:
+            cond3 = 1 if coordinated_turn_roll > 0.0 else 0
+            cond4 = 1 if coordinated_turn_roll < 0.0 else 0
+            omega = 9.81/ airspeed_turn * 1.72305 * (cond3 - cond4)
+
+        R_vb = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
+        R_vb = R_vb @ np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
         steady_state = current_wind[0:3]
         gust = current_wind[3:6]
-        # convert wind vector from world to body frame and add gust
         wind_body_frame = R_vb @ steady_state + gust
         v_air_b = R_vb.T.dot(cur_vel)
         ur = v_air_b[0] - wind_body_frame[0]
@@ -868,29 +857,19 @@ class INDIControl(BaseControl):
         wr = v_air_b[2] - wind_body_frame[2]
         # compute airspeed
         Va = np.sqrt(ur ** 2 + vr ** 2 + wr ** 2)
+        # compute sideslip angle
         if Va == 0:
-            beta = np.sign(cur_vel[1]) * np.pi / 2
+            beta = np.sign(vr) * np.pi / 2
         else:
-            beta = np.arcsin(cur_vel[1] / Va)
+            beta = np.arcsin(vr / np.sqrt(ur ** 2 + vr ** 2 + wr ** 2))
 
-        phi_cond1 = 1 if guidance_euler_cmd[0]> 0 else -1
-        phi_cond2 = 1 if guidance_euler_cmd[0]< 0 else -1
-        if ((guidance_euler_cmd[1] > 0.0) and (np.abs(guidance_euler_cmd[0]) < guidance_euler_cmd[1])):
-            coordinated_turn_roll = np.sign(phi) * guidance_euler_cmd[1]
+        guidance_euler_cmd[2] = psi + (omega-K_beta*beta)/96
 
-        if (np.abs(coordinated_turn_roll) < max_phi):
-            omega = 9.81 * np.tan(coordinated_turn_roll) / airspeed_turn
-        else :
-            # max 60 degrees roll
-            omega = 9.81 * np.tan(max_phi) * np.sign(phi) / airspeed_turn
-
-        guidance_indi_hybrid_heading_sp = psi + (omega - K_beta * beta)/96
-        guidance_indi_hybrid_heading_sp = normalize_angle(guidance_indi_hybrid_heading_sp)
-        guidance_euler_cmd[2] = -guidance_indi_hybrid_heading_sp
-
-        # now we correct the angles again
+        guidance_euler_cmd[0] *= -1
         guidance_euler_cmd[1] = guidance_euler_cmd[1] + np.radians(90)
-        print(thrust,np.degrees(guidance_euler_cmd))
+        guidance_euler_cmd[2] *= 1
+
+        #print('GUIDANCE',np.degrees(guidance_euler_cmd),a_diff,np.degrees([phi,theta,psi]),self.control_counter)
 
         return thrust, guidance_euler_cmd
 
@@ -984,12 +963,16 @@ class INDIControl(BaseControl):
         speed_gain =self.guidance_indi_speed_gain
         speed_gainz = self.guidance_indi_speed_gain*0.8
 
+        R_vb = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
+        # We now correct R_vb from Pybullet frame to wind frame
+        R_vb = R_vb @ np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
+
         cur_quat = np.array([cur_quat[3], cur_quat[0], cur_quat[1], cur_quat[2]])
         cur_rpy = get_euler_from_quaternion_ZXY(cur_quat)#np.array(p.getEulerFromQuaternion(cur_quat))
         rphi, rtheta, rpsi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
         # For INDI, theta is 0 when hover and -90 in cruise
         theta = -np.radians(90) - rtheta
-        psi = -rpsi
+        psi = rpsi
         phi = rphi
         cpsi = np.cos(psi)
         spsi = np.sin(psi)
@@ -999,10 +982,7 @@ class INDIControl(BaseControl):
         speed_sp_b_y = -spsi * gi_speed_sp[0] + cpsi * gi_speed_sp[1]
         airspeed = np.linalg.norm(cur_vel)
 
-        R_vb = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
-        # We now correct R_vb from Pybullet frame to wind frame
-        R_vb = R_vb @ np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
-
+        # wind
         steady_state = current_wind[0:3]
         gust = current_wind[3:6]
         # convert wind vector from world to body frame and add gust
@@ -1046,8 +1026,8 @@ class INDIControl(BaseControl):
                 if ((speed_increment + airspeed) > guidance_indi_max_airspeed):
                     speed_sp_b_x = guidance_indi_max_airspeed + groundspeed_x - airspeed
 
-            gi_speed_sp[0] = cpsi * speed_sp_b_x - spsi * speed_sp_b_y;
-            gi_speed_sp[1] = spsi * speed_sp_b_x + cpsi * speed_sp_b_y;
+            gi_speed_sp[0] = cpsi * speed_sp_b_x - spsi * speed_sp_b_y
+            gi_speed_sp[1] = spsi * speed_sp_b_x + cpsi * speed_sp_b_y
 
             accel_sp[0] = (gi_speed_sp[0] - cur_vel[0]) * speed_gain
             accel_sp[1] = (gi_speed_sp[1] - cur_vel[1]) * speed_gain
@@ -1058,6 +1038,7 @@ class INDIControl(BaseControl):
             accel_sp[1] = np.clip(accel_sp[1], -accelbound, accelbound)
             accel_sp[2] = np.clip(accel_sp[2], -3.0, 3.0)
 
+        print(gi_speed_sp, accel_sp,psi)
         return accel_sp
 
 
