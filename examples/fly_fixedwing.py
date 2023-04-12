@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--obstacles',          default=False,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
     parser.add_argument('--simulation_freq_hz', default=240,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
     parser.add_argument('--control_freq_hz',    default=96,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--duration_sec',       default=60,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
+    parser.add_argument('--duration_sec',       default=115,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
     ARGS = parser.parse_args()
 
     #### Initialize the simulation #############################
@@ -73,7 +73,7 @@ if __name__ == "__main__":
                                     #[1500, 10, 40],
                                      [0,-100,40],
                                      [0,300,40],
-                                     [0, 700, 40],
+                                     [0, -100, 40],
                                      #[]
                                     ])
     ARRIVED_AT_WAYPOINT = 10
@@ -145,9 +145,13 @@ if __name__ == "__main__":
             diff = target_pos - np.array([x,y,z])
             diff_norm = np.linalg.norm(diff)
             if diff_norm < ARRIVED_AT_WAYPOINT:
-                trajectory_setpoints = np.delete(trajectory_setpoints,0,0)
-                target_pos = trajectory_setpoints[0]
-                print("*******SETPOINT VISITED. UPDATING TO :", trajectory_setpoints[0] )
+                try:
+                    trajectory_setpoints = np.delete(trajectory_setpoints,0,0)
+                    target_pos = trajectory_setpoints[0]
+                    print("*******SETPOINT VISITED. UPDATING TO :", trajectory_setpoints[0] )
+                except:
+                    print("*******LAST SETPOINT VISITED ********")
+                    break
             #print(x,y,target_pos)
 
             #### Compute control for the current way point #############

@@ -869,7 +869,6 @@ class INDIControl(BaseControl):
         guidance_euler_cmd[0] *= -1
         guidance_euler_cmd[1] = guidance_euler_cmd[1] + np.radians(90)
         guidance_euler_cmd[2] *= 1
-        print(cur_pos, np.degrees(guidance_euler_cmd),np.degrees(beta),self.control_counter)
 
         return thrust, guidance_euler_cmd
 
