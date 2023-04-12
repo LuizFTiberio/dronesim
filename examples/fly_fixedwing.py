@@ -36,7 +36,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_drones',         default=1,          type=int,           help='Number of drones (default: 3)', metavar='')
     parser.add_argument('--physics',            default="pyb",      type=Physics,       help='Physics updates (default: PYB)', metavar='', choices=Physics)
     parser.add_argument('--vision',             default=False,      type=str2bool,      help='Whether to use VisionAviary (default: False)', metavar='')
-    parser.add_argument('--gui',                default=True,       type=str2bool,      help='Whether to use PyBullet GUI (default: True)', metavar='')
+    parser.add_argument('--gui',                default=False,       type=str2bool,      help='Whether to use PyBullet GUI (default: True)', metavar='')
     parser.add_argument('--record_video',       default=False,      type=str2bool,      help='Whether to record a video (default: False)', metavar='')
     parser.add_argument('--plot',               default=True,       type=str2bool,      help='Whether to plot the simulation results (default: True)', metavar='')
     parser.add_argument('--user_debug_gui',     default=False,      type=str2bool,      help='Whether to add debug lines and parameters to the GUI (default: False)', metavar='')
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--obstacles',          default=False,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
     parser.add_argument('--simulation_freq_hz', default=240,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
     parser.add_argument('--control_freq_hz',    default=96,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--duration_sec',       default=12,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
+    parser.add_argument('--duration_sec',       default=60,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
     ARGS = parser.parse_args()
 
     #### Initialize the simulation #############################
@@ -53,26 +53,30 @@ if __name__ == "__main__":
     R = .6
     AGGR_PHY_STEPS = int(ARGS.simulation_freq_hz/ARGS.control_freq_hz) if ARGS.aggregate else 1
 
-    INIT_XYZS = np.array([[50., -30., 40]])
+    INIT_XYZS = np.array([[-100., -100., 40]])
 
     ## To forward X ###
-    #INIT_RPYS = np.array([[0, 0, 0]])
-    #INIT_VELS = np.array([[18, 0., 0]])
+    INIT_RPYS = np.array([[0, 0, 0]])
+    INIT_VELS = np.array([[18, 0., 0]])
+    target_vel = np.array([0, 0, 0])
 
-    INIT_RPYS = np.array([[0, 0, np.radians(180)]])
-    INIT_VELS = np.array([[-18, 0., 0]])
+    #INIT_RPYS = np.array([[0, 0, np.radians(180)]])
+    #INIT_VELS = np.array([[-18, 0., 0]])
+    #target_vel=np.array([0,0,0])
 
     #### Initialize a circular trajectory ######################
     PERIOD = 15
     NUM_WP = ARGS.control_freq_hz*PERIOD
     trajectory_setpoints = np.array([
-                                    #[-30, -30, 40],
-                                    [-1500, -30, 30],
-                                    #[120, 40, 40],
-                                    #[130, 120, 40],
-                                    #[50,  160, 40]
+                                    #[-50, 30, 40],
+                                    #[500, 10, 40],
+                                    #[1500, 10, 40],
+                                     [0,-100,40],
+                                     [0,300,40],
+                                     [0, 700, 40],
+                                     #[]
                                     ])
-    ARRIVED_AT_WAYPOINT = 5
+    ARRIVED_AT_WAYPOINT = 10
 
     # Two options of trajectory
     TARGET_POS = np.zeros((NUM_WP,3))+ np.array([0,0,20])
@@ -151,7 +155,7 @@ if __name__ == "__main__":
                 action[str(j)], _, _ = ctrl[j].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
                                                                        state=obs[str(j)]["state"],
                                                                        target_pos= target_pos,##TARGET_POS[wp_counters[j]],
-                                                                       target_vel=np.array([18,0,0]),
+                                                                       target_vel=target_vel,
                                                                        current_wind = current_wind)
                 # Over-write the action
                 #action[str(j)] = np.array([.95,.95,.95,.95])

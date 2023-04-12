@@ -206,7 +206,7 @@ while 1:
     #                     )
     p.applyExternalTorque(vehicle,
                             0,
-                            torqueObj=[ 0,servo2/3000,0],
+                            torqueObj=[ 0,0,servo2/3000],
                             flags=p.LINK_FRAME,
                             physicsClientId=physicsClient
                             )

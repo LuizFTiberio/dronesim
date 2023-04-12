@@ -269,9 +269,9 @@ class Logger(object):
 
         #### Time ##################################################
         row = 9
-        axs[row, col].plot(t, t, label="time")
-        axs[row, col].set_xlabel('time')
-        axs[row, col].set_ylabel('time')
+        axs[row, col].plot(self.states[j, 1, :], self.states[j, 0, :], label="xy trajectory")
+        axs[row, col].set_xlabel('y')
+        axs[row, col].set_ylabel('x')
 
         #### Column ################################################
         col = 1

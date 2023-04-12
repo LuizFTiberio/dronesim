@@ -457,8 +457,8 @@ class INDIControl(BaseControl):
         """
         self.control_counter += 1
         #print(self.control_counter)
-        if self.control_counter == 7:
-            print('stop')
+        #if self.control_counter == 7:
+        #    print('stop')
 
         nav_carrot = self._WayPointNavigation(control_timestep,
                                               cur_pos,
@@ -467,8 +467,8 @@ class INDIControl(BaseControl):
         gi_speed_sp = self._compute_guidance_indi_run_pos(control_timestep,
                                cur_pos,
                                cur_vel,
-                               nav_carrot,
-                               target_vel)
+                               nav_carrot
+                               )
 
         sp_accel = self._compute_accel_from_speed_sp(control_timestep, cur_quat, cur_vel, gi_speed_sp,
                                                      current_wind)
@@ -488,7 +488,7 @@ class INDIControl(BaseControl):
                                           cur_quat,
                                           cur_ang_vel,
                                           computed_target_rpy)
-
+        rpm = np.clip(rpm,0.6,1)
         return rpm, 0. ,0.
 
     
@@ -756,12 +756,14 @@ class INDIControl(BaseControl):
             The current position error.
 
         """
-        K_beta = 7
+        K_beta = 30
         GUIDANCE_INDI_PITCH_EFF_SCALING = 1.0
         liftd_asq =  0.20
         liftd_p80 = liftd_asq * 12 * 12
         liftd_p50 = liftd_p80/2
 
+        R_vb = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
+        R_vb = R_vb @ np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
         cur_quat = np.array([cur_quat[3], cur_quat[0], cur_quat[1], cur_quat[2]])
         cur_rpy = get_euler_from_quaternion_ZXY(cur_quat)  # np.array(p.getEulerFromQuaternion(cur_quat))
         rphi, rtheta, rpsi = cur_rpy[0], cur_rpy[1], cur_rpy[2]
@@ -779,7 +781,7 @@ class INDIControl(BaseControl):
         pitch_lift = theta
         pitch_lift = np.clip(pitch_lift,-np.pi/2,0)
         lift = np.sin(pitch_lift) * 9.81
-        T = -np.cos(pitch_lift)*9.81
+        T = -np.cos(pitch_lift)* 9.81
 
         pitch_interp = np.degrees(theta)
         min_pitch = -80.0
@@ -824,7 +826,7 @@ class INDIControl(BaseControl):
         euler_cmd = Gmat_inv.dot(a_diff)
         thrust = euler_cmd[2]
 
-        max_phi = np.radians(35)
+        max_phi = np.radians(45)
         airspeed_turn = np.clip(airspeed,10,30)
         guidance_euler_cmd = np.zeros(3)
         guidance_euler_cmd[0] = phi + euler_cmd[0]
@@ -840,14 +842,13 @@ class INDIControl(BaseControl):
             coordinated_turn_roll = (cond1-cond2) * guidance_euler_cmd[1]
 
         if np.abs(coordinated_turn_roll)<max_phi:
-            omega = 9.81/ airspeed_turn * np.tan(coordinated_turn_roll)
+            omega = 9.81 * np.tan(coordinated_turn_roll)/ airspeed_turn
         else:
             cond3 = 1 if coordinated_turn_roll > 0.0 else 0
             cond4 = 1 if coordinated_turn_roll < 0.0 else 0
             omega = 9.81/ airspeed_turn * 1.72305 * (cond3 - cond4)
 
-        R_vb = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
-        R_vb = R_vb @ np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
+
         steady_state = current_wind[0:3]
         gust = current_wind[3:6]
         wind_body_frame = R_vb @ steady_state + gust
@@ -868,8 +869,7 @@ class INDIControl(BaseControl):
         guidance_euler_cmd[0] *= -1
         guidance_euler_cmd[1] = guidance_euler_cmd[1] + np.radians(90)
         guidance_euler_cmd[2] *= 1
-
-        #print('GUIDANCE',np.degrees(guidance_euler_cmd),a_diff,np.degrees([phi,theta,psi]),self.control_counter)
+        print(cur_pos, np.degrees(guidance_euler_cmd),np.degrees(beta),self.control_counter)
 
         return thrust, guidance_euler_cmd
 
@@ -878,8 +878,8 @@ class INDIControl(BaseControl):
                                control_timestep,
                                cur_pos,
                                cur_vel,
-                               target_pos,
-                               target_vel):
+                               target_pos
+                               ):
 
         """ENAC generic INDI position control.
 
@@ -912,9 +912,11 @@ class INDIControl(BaseControl):
         """
         gi_speed_sp = np.zeros(3)
         pos_err = target_pos - cur_pos
-        gi_speed_sp[0] = pos_err[0] * self.guidance_indi_pos_gain + target_vel[0]
-        gi_speed_sp[1] = pos_err[1] * self.guidance_indi_pos_gain + target_vel[1]
-        gi_speed_sp[2] = pos_err[2] * self.guidance_indi_pos_gain + target_vel[2]
+
+
+        gi_speed_sp[0] = pos_err[0] * self.guidance_indi_pos_gain
+        gi_speed_sp[1] = pos_err[1] * self.guidance_indi_pos_gain
+        gi_speed_sp[2] = pos_err[2] * self.guidance_indi_pos_gain*1.2
         airspeed = np.linalg.norm(cur_vel)
         if airspeed > 13:
             gi_speed_sp[2] = np.clip(gi_speed_sp[2], -4, 4)
@@ -959,9 +961,9 @@ class INDIControl(BaseControl):
 
         """
         guidance_indi_max_airspeed = 25
-        heading_bank_gain = 6
+        heading_bank_gain = 40
         speed_gain =self.guidance_indi_speed_gain
-        speed_gainz = self.guidance_indi_speed_gain*0.8
+        speed_gainz = self.guidance_indi_speed_gain*1.5
 
         R_vb = np.array(p.getMatrixFromQuaternion(cur_quat)).reshape(3, 3)
         # We now correct R_vb from Pybullet frame to wind frame
@@ -997,8 +999,7 @@ class INDIControl(BaseControl):
                 if np.linalg.norm(windspeed) < guidance_indi_max_airspeed:
                     av = gi_speed_sp[0] * gi_speed_sp[0] + gi_speed_sp[1] * gi_speed_sp[1]
                     bv = -2. * (windspeed[0] * gi_speed_sp[0] + windspeed[1] * gi_speed_sp[1])
-                    cv = windspeed[0] * windspeed[0] + windspeed[1] * windspeed[
-                        1] - guidance_indi_max_airspeed * guidance_indi_max_airspeed
+                    cv = windspeed[0] * windspeed[0] + windspeed[1] * windspeed[1] - guidance_indi_max_airspeed * guidance_indi_max_airspeed
                     dv = np.abs(bv * bv - 4.0 * av * cv)
                     groundspeed_factor = (-bv + np.sqrt(dv)) / (2. * av)
 
@@ -1038,7 +1039,6 @@ class INDIControl(BaseControl):
             accel_sp[1] = np.clip(accel_sp[1], -accelbound, accelbound)
             accel_sp[2] = np.clip(accel_sp[2], -3.0, 3.0)
 
-        print(gi_speed_sp, accel_sp,psi)
         return accel_sp
 
 
