@@ -30,13 +30,28 @@ from dronesim.utils.wind_simulation import WindSimulation
 
 if __name__ == "__main__":
 
+
+    ## changeable parameters ##
+    ctrl_gains = {
+        'G1' : np.array([[ 150.,-150.,-150.,150],[650.,-650.,650,-650.],[1350.,1350.,-1350.,-1350.],[900,900,900,900]]),
+        'kp': 0.8,
+        'kd': 0.65,
+        'att_p': 20,
+        'att_q': 30,
+        'att_r': 25,
+        'rate_p': 8,
+        'rate_q': 8,
+        'rate_r': 8,
+    }
+
+
     #### Define and parse (optional) arguments for the script ##
     parser = argparse.ArgumentParser(description='Helix flight script using CtrlAviary or VisionAviary and DSLPIDControl')
     parser.add_argument('--drone',              default=['Falcon'],  type=list,    help='Drone model (default: CF2X)', metavar='', choices=[DroneModel])
     parser.add_argument('--num_drones',         default=1,          type=int,           help='Number of drones (default: 3)', metavar='')
     parser.add_argument('--physics',            default="pyb",      type=Physics,       help='Physics updates (default: PYB)', metavar='', choices=Physics)
     parser.add_argument('--vision',             default=False,      type=str2bool,      help='Whether to use VisionAviary (default: False)', metavar='')
-    parser.add_argument('--gui',                default=False,       type=str2bool,      help='Whether to use PyBullet GUI (default: True)', metavar='')
+    parser.add_argument('--gui',                default=True,       type=str2bool,      help='Whether to use PyBullet GUI (default: True)', metavar='')
     parser.add_argument('--record_video',       default=False,      type=str2bool,      help='Whether to record a video (default: False)', metavar='')
     parser.add_argument('--plot',               default=True,       type=str2bool,      help='Whether to plot the simulation results (default: True)', metavar='')
     parser.add_argument('--user_debug_gui',     default=False,      type=str2bool,      help='Whether to add debug lines and parameters to the GUI (default: False)', metavar='')
@@ -124,7 +139,7 @@ if __name__ == "__main__":
                     )
 
     states_logger = []
-    ctrl = [INDIControl(drone_model=drone) for drone in ARGS.drone]
+    ctrl = [INDIControl(drone_model=drone,control_gains=ctrl_gains) for drone in ARGS.drone]
     wind = WindSimulation(1 / ARGS.simulation_freq_hz)
     #### Run the simulation ####################################
     CTRL_EVERY_N_STEPS = int(np.floor(env.SIM_FREQ/ARGS.control_freq_hz))

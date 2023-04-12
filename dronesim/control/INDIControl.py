@@ -205,6 +205,7 @@ class INDIControl(BaseControl):
     def __init__(self,
                  drone_model: list=['tello'],
                  g: float=9.8,
+                 control_gains ={}
                  ):
         """Common control classes __init__ method.
 
@@ -216,28 +217,10 @@ class INDIControl(BaseControl):
             The gravitational acceleration in m/s^2.
 
         """
-        super().__init__(drone_model=drone_model, g=g)
+        super().__init__(drone_model=drone_model, g=g,control_gains=control_gains)
         self.DRONE_MODEL = drone_model
         self.URDF = self.DRONE_MODEL + ".urdf"
-
-        # this is being called from the init of BaseControl !
-        # self._parseURDFControlParameters() 
-        #========
-        # self.P_COEFF_FOR = np.array([.4, .4, 1.25])
-        # self.I_COEFF_FOR = np.array([.05, .05, .05])
-        # self.D_COEFF_FOR = np.array([.2, .2, .5])
-        # self.P_COEFF_TOR = np.array([70000., 70000., 60000.])
-        # self.I_COEFF_TOR = np.array([.0, .0, 500.])
-        # self.D_COEFF_TOR = np.array([20000., 20000., 12000.])
-        # self.PWM2RPM_SCALE = 0.2685
-        # self.PWM2RPM_CONST = 4070.3
-        # self.MIN_PWM = 20000
-        # self.MAX_PWM = 65535
-        # if self.DRONE_MODEL == DroneModel.CF2X:
-        #     self.MIXER_MATRIX = np.array([ [.5, -.5,  -1], [.5, .5, 1], [-.5,  .5,  -1], [-.5, -.5, 1] ])
-        # elif self.DRONE_MODEL == DroneModel.CF2P:
-        #     self.MIXER_MATRIX = np.array([ [0, -1,  -1], [+1, 0, 1], [0,  1,  -1], [-1, 0, 1] ])
-        #========
+        self.CTRL_GAINS = control_gains
         self.reset()
 
     ################################################################################
@@ -259,25 +242,38 @@ class INDIControl(BaseControl):
         self.G1 = np.zeros((self.indi_output_nr, self.indi_actuator_nr))
         print('*************')
 
-        indi = URDF_TREE.find("control")
-        for i in range(self.indi_output_nr):
-            vals = [str(k) for k in indi[i+1].attrib.values()]
-            self.G1[i] = [float(s) for s in vals[0].split(' ') if s != '']
-
         self.indi_gains = Gains()
-        guidance_gains = URDF_TREE.find("control/indi_guidance_gains/pos")
-        self.guidance_indi_pos_gain   = float(guidance_gains.attrib['kp'])
-        self.guidance_indi_speed_gain = float(guidance_gains.attrib['kd'])
 
-        att_att_gains = URDF_TREE.find("control/indi_att_gains/att")
-        att_rate_gains = URDF_TREE.find("control/indi_att_gains/rate")
+        if self.CTRL_GAINS != {}:
+            self.G1 = self.CTRL_GAINS['G1']
+            self.guidance_indi_pos_gain = self.CTRL_GAINS['kp']
+            self.guidance_indi_speed_gain = self.CTRL_GAINS['kd']
+            self.indi_gains.att.p = self.CTRL_GAINS['att_p']
+            self.indi_gains.att.q = self.CTRL_GAINS['att_q']
+            self.indi_gains.att.r = self.CTRL_GAINS['att_r']
+            self.indi_gains.rate.p = self.CTRL_GAINS['rate_p']
+            self.indi_gains.rate.q = self.CTRL_GAINS['rate_q']
+            self.indi_gains.rate.r = self.CTRL_GAINS['rate_r']
 
-        self.indi_gains.att.p = float(att_att_gains.attrib['p'])
-        self.indi_gains.att.q = float(att_att_gains.attrib['q'])
-        self.indi_gains.att.r = float(att_att_gains.attrib['r'])
-        self.indi_gains.rate.p = float(att_rate_gains.attrib['p'])
-        self.indi_gains.rate.q = float(att_rate_gains.attrib['q'])
-        self.indi_gains.rate.r = float(att_rate_gains.attrib['r'])
+        else:
+            indi = URDF_TREE.find("control")
+            for i in range(self.indi_output_nr):
+                vals = [str(k) for k in indi[i+1].attrib.values()]
+                self.G1[i] = [float(s) for s in vals[0].split(' ') if s != '']
+
+            guidance_gains = URDF_TREE.find("control/indi_guidance_gains/pos")
+            self.guidance_indi_pos_gain   = float(guidance_gains.attrib['kp'])
+            self.guidance_indi_speed_gain = float(guidance_gains.attrib['kd'])
+
+            att_att_gains = URDF_TREE.find("control/indi_att_gains/att")
+            att_rate_gains = URDF_TREE.find("control/indi_att_gains/rate")
+
+            self.indi_gains.att.p = float(att_att_gains.attrib['p'])
+            self.indi_gains.att.q = float(att_att_gains.attrib['q'])
+            self.indi_gains.att.r = float(att_att_gains.attrib['r'])
+            self.indi_gains.rate.p = float(att_rate_gains.attrib['p'])
+            self.indi_gains.rate.q = float(att_rate_gains.attrib['q'])
+            self.indi_gains.rate.r = float(att_rate_gains.attrib['r'])
 
         pwm2rpm = URDF_TREE.find("control/pwm/pwm2rpm")
         # self.PWM2RPM_SCALE = float(pwm2rpm.attrib['scale'])

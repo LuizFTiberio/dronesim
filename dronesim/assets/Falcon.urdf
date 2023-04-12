@@ -54,19 +54,17 @@
   </control>
 
    <aero_coeffs>
-    <ref rho="1.225" alpha0="0.47" Sref="0.075" Bref="0.7" Cref="0.105" Vref="18." oswald="0.9" AR="6.5" M="60" epsilon="0.16" actuator_nr="4"/>
-    <CL  CL = "0.5" CL0="0.48115"   CL_alpha="4.28" CL_q="6.689983"   CL_del_e="0"/>
-    <CD  CD = "0.06130" CD0="0.06130"  CD_alpha="0"  CD_q="0.0" CD_p="0.0" CD_del_e="0"/>
+    <ref rho="1.225" alpha0="0.47" Sref="0.075" Bref="0.7" Cref="0.105" oswald="0.9" AR="6.5" M="60" actuator_nr="4"/>
+    <CL  CL0="0.48115"   CL_alpha="4.28" CL_q="6.689983"   CL_del_e="0"/>
+    <CD  CD0="0.06130" CD_q="0.0"  CD_del_e="0"/>
     <CY  CY0="0.0"   CY_beta="-0.049996"  CY_p="0.088261" CY_r="-0.009328"  CY_del_r="0" CY_del_a="0"/>
     <Cl  Cl_beta="-0.047674"  Cl_p="-0.443968" Cl_r="0.119986" Cl_del_a="0" Cl_del_r="0"/>
-    <Cm  Cm0="-0.11072" Cm_alpha="-1.042060" Cm_q="-2.406242" Cm_del_e="-0"/>
+    <Cm  Cm0="-0.11072" Cm_alpha="-1.042060" Cm_q="-2.406242" Cm_del_e="0"/>
     <Cn  Cn_beta="0.005068"  Cn_p="-0.034716" Cn_r="-0.004010" Cn_del_a="0.0" Cn_del_r="0."/>
   </aero_coeffs>
 
   <motor_coeffs>
     <Thrust angle_deg = "20" x_pos = "0" y_pos = "0." z_pos = "0.1"/>
-    <Coeffs C_Q0 = "0." C_Q1 = "0." C_Q2 = "0." KQ = "0." R_motor = "0." i0 = "0." KV = "0.0" C_T0 = "-0.1" C_T1 = "-0.0" C_T2 = "0.0" V_max="0." />
-    <Prop D_prop = "0.508"/>
   </motor_coeffs>
 
 

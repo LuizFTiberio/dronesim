@@ -624,7 +624,9 @@ class BaseAviary(gym.Env):
         """
         if self.RECORD and self.GUI:
             self.VIDEO_ID = pyb.startStateLogging(loggingType=pyb.STATE_LOGGING_VIDEO_MP4,
-                                                fileName=os.path.dirname(os.path.abspath(__file__))+"/../../files/videos/video-"+datetime.now().strftime("%m.%d.%Y_%H.%M.%S")+".mp4",
+                                                #fileName=os.path.dirname(os.path.abspath(__file__))+"/../../files/videos/video-"+datetime.now().strftime("%m.%d.%Y_%H.%M.%S")+".mp4",
+                                                  fileName="/home/luiztiberio/Videos/video-" + datetime.now().strftime(
+                                                      "%m.%d.%Y_%H.%M.%S") + ".mp4",
                                                 physicsClientId=self.CLIENT
                                                 )
         if self.RECORD and not self.GUI:
@@ -1875,22 +1877,18 @@ class BaseAviary(gym.Env):
         drone.Bref = float(ref.attrib['Bref'])
         drone.Sref = float(ref.attrib['Sref'])
         drone.Cref = float(ref.attrib['Cref'])
-        drone.Vref = float(ref.attrib['Vref'])
         drone.oswald = float(ref.attrib['oswald'])
         drone.AR = float(ref.attrib['AR'])
         drone.rho = float(ref.attrib['rho'])
 
         CL = URDF_TREE.find("aero_coeffs/CL")
-        drone.CL = float(CL.attrib['CL'])
         drone.CL0 = float(CL.attrib['CL0'])
         drone.CL_alpha = float(CL.attrib['CL_alpha'])
         drone.CL_q = float(CL.attrib['CL_q'])
         drone.CL_del_e = float(CL.attrib['CL_del_e'])
 
         cd = URDF_TREE.find("aero_coeffs/CD")
-        drone.CD = float(cd.attrib['CD'])
         drone.CD0 = float(cd.attrib['CD0'])
-        drone.CD_alpha = float(cd.attrib['CD_alpha'])
         drone.CD_q = float(cd.attrib['CD_q'])
         drone.CD_del_e = float(cd.attrib['CD_del_e'])
 
@@ -1928,21 +1926,6 @@ class BaseAviary(gym.Env):
         drone.y_pos = float(Thrust.attrib['y_pos'])
         drone.z_pos = float(Thrust.attrib['z_pos'])
 
-        Thrust = URDF_TREE.find("motor_coeffs/Coeffs")
-        drone.KV  = float(Thrust.attrib['KV'])
-        drone.V_max = float(Thrust.attrib['V_max'])
-        drone.KQ  = float(Thrust.attrib['KQ'])
-        drone.R_motor  = float(Thrust.attrib['R_motor'])
-        drone.i0  = float(Thrust.attrib['i0'])
-        drone.C_Q2 = float(Thrust.attrib['C_Q2'])
-        drone.C_Q1 = float(Thrust.attrib['C_Q1'])
-        drone.C_Q0 = float(Thrust.attrib['C_Q0'])
-        drone.C_T2 = float(Thrust.attrib['C_T2'])
-        drone.C_T1 = float(Thrust.attrib['C_T1'])
-        drone.C_T0 = float(Thrust.attrib['C_T0'])
-
-        Thrust = URDF_TREE.find("motor_coeffs/Prop")
-        drone.D_prop = float(Thrust.attrib['D_prop'])
 
     ###############################################################################
     def _parseURDFParameters(self,URDF):

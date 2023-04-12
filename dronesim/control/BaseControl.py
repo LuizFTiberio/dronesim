@@ -20,7 +20,8 @@ class BaseControl(object):
 
     def __init__(self,
                  drone_model: str='tello',
-                 g: float=9.8
+                 g: float=9.8,
+                 control_gains={},
                  ):
         """Common control classes __init__ method.
 
@@ -41,6 +42,7 @@ class BaseControl(object):
         """float: The coefficient converting RPMs into thrust."""
         self.KM = self._getURDFParameter('km')
         """float: The coefficient converting RPMs into torque."""
+        self.CTRL_GAINS = control_gains
 
         # self.DRONE_MODEL = drone_model
         self.URDF = self.DRONE_MODEL + ".urdf"
