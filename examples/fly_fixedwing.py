@@ -30,21 +30,6 @@ from dronesim.utils.wind_simulation import WindSimulation
 
 if __name__ == "__main__":
 
-
-    ## changeable parameters ##
-    ctrl_gains = {
-        'G1' : np.array([[ 150.,-150.,-150.,150],[650.,-650.,650,-650.],[1350.,1350.,-1350.,-1350.],[900,900,900,900]]),
-        'kp': 0.8,
-        'kd': 0.65,
-        'att_p': 20,
-        'att_q': 30,
-        'att_r': 25,
-        'rate_p': 8,
-        'rate_q': 8,
-        'rate_r': 8,
-    }
-
-
     #### Define and parse (optional) arguments for the script ##
     parser = argparse.ArgumentParser(description='Helix flight script using CtrlAviary or VisionAviary and DSLPIDControl')
     parser.add_argument('--drone',              default=['Falcon'],  type=list,    help='Drone model (default: CF2X)', metavar='', choices=[DroneModel])
@@ -127,7 +112,8 @@ if __name__ == "__main__":
                          record=ARGS.record_video,
                          obstacles=ARGS.obstacles,
                          user_debug_gui=ARGS.user_debug_gui,
-                         ctrl_gains = np.zeros(4)
+                         geometry_coeffs={},
+                         aero_coeffs ={}
                          )
 
     #### Obtain the PyBullet Client ID from the environment ####
@@ -139,7 +125,7 @@ if __name__ == "__main__":
                     )
 
     states_logger = []
-    ctrl = [INDIControl(drone_model=drone,control_gains=ctrl_gains) for drone in ARGS.drone]
+    ctrl = [INDIControl(drone_model=drone,control_gains={}) for drone in ARGS.drone]
     wind = WindSimulation(1 / ARGS.simulation_freq_hz)
     #### Run the simulation ####################################
     CTRL_EVERY_N_STEPS = int(np.floor(env.SIM_FREQ/ARGS.control_freq_hz))

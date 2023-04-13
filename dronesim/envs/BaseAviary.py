@@ -141,7 +141,8 @@ class BaseAviary(gym.Env):
                  user_debug_gui=True,
                  vision_attributes=False,
                  dynamics_attributes=False,
-                 ctrl_gains=np.zeros(4)
+                 geometry_coeffs={},
+                 aero_coeffs={}
                  ):
         """Initialization of a generic aviary environment.
 
@@ -186,7 +187,8 @@ class BaseAviary(gym.Env):
         self.AGGR_PHY_STEPS = aggregate_phy_steps
         #### Parameters ############################################
         self.NUM_DRONES = num_drones
-        self.CTRL_GAINS = ctrl_gains
+        self.GEOMETRY_COEFFS = geometry_coeffs
+        self.AERO_COEFFS = aero_coeffs
         self.NEIGHBOURHOOD_RADIUS = neighbourhood_radius
         #### Options ###############################################
         self.DRONE_MODEL = drone_model
@@ -196,26 +198,6 @@ class BaseAviary(gym.Env):
         self.OBSTACLES = obstacles
         self.USER_DEBUG = user_debug_gui
         self.URDF = [drone + ".urdf" for drone in drone_model]
-        #### Load the drone properties from the .urdf file #########
-        # self.M, \
-        # self.L, \
-        # self.THRUST2WEIGHT_RATIO, \
-        # self.J, \
-        # self.J_INV, \
-        # self.KF, \
-        # self.KM, \
-        # self.COLLISION_H,\
-        # self.COLLISION_R, \
-        # self.COLLISION_Z_OFFSET, \
-        # self.MAX_SPEED_KMH, \
-        # self.GND_EFF_COEFF, \
-        # self.PROP_RADIUS, \
-        # self.DRAG_COEFF, \
-        # self.DW_COEFF_1, \
-        # self.DW_COEFF_2, \
-        # self.DW_COEFF_3 = self._parseURDFParameters(self.URDF)
-        # print("[INFO] BaseAviary.__init__() loaded parameters from the drone's .urdf:\n[INFO] m {:f}, L {:f},\n[INFO] ixx {:f}, iyy {:f}, izz {:f},\n[INFO] kf {:f}, km {:f},\n[INFO] t2w {:f}, max_speed_kmh {:f},\n[INFO] gnd_eff_coeff {:f}, prop_radius {:f},\n[INFO] drag_xy_coeff {:f}, drag_z_coeff {:f},\n[INFO] dw_coeff_1 {:f}, dw_coeff_2 {:f}, dw_coeff_3 {:f}".format(
-        #     self.M, self.L, self.J[0,0], self.J[1,1], self.J[2,2], self.KF, self.KM, self.THRUST2WEIGHT_RATIO, self.MAX_SPEED_KMH, self.GND_EFF_COEFF, self.PROP_RADIUS, self.DRAG_COEFF[0], self.DRAG_COEFF[2], self.DW_COEFF_1, self.DW_COEFF_2, self.DW_COEFF_3))
         self.drones = [Drone(*self._parseURDFParameters(drone)) for drone in self.URDF]
 
         for drone, urdf in zip(self.drones, self.URDF):
@@ -1874,51 +1856,88 @@ class BaseAviary(gym.Env):
         ref = URDF_TREE.find("aero_coeffs/ref")
         drone.M = float(ref.attrib['M'])
         drone.alpha0 = float(ref.attrib['alpha0'])
-        drone.Bref = float(ref.attrib['Bref'])
-        drone.Sref = float(ref.attrib['Sref'])
-        drone.Cref = float(ref.attrib['Cref'])
         drone.oswald = float(ref.attrib['oswald'])
-        drone.AR = float(ref.attrib['AR'])
         drone.rho = float(ref.attrib['rho'])
+        if self.GEOMETRY_COEFFS == {}:
+            drone.AR = float(ref.attrib['AR'])
+            drone.Bref = float(ref.attrib['Bref'])
+            drone.Sref = float(ref.attrib['Sref'])
+            drone.Cref = float(ref.attrib['Cref'])
+        else:
+            drone.AR =  self.GEOMETRY_COEFFS['AR']
+            drone.Bref = self.GEOMETRY_COEFFS['Bref']
+            drone.Sref = self.GEOMETRY_COEFFS['Sref']
+            drone.Cref = self.GEOMETRY_COEFFS['Cref']
 
-        CL = URDF_TREE.find("aero_coeffs/CL")
-        drone.CL0 = float(CL.attrib['CL0'])
-        drone.CL_alpha = float(CL.attrib['CL_alpha'])
-        drone.CL_q = float(CL.attrib['CL_q'])
-        drone.CL_del_e = float(CL.attrib['CL_del_e'])
+        if self.AERO_COEFFS == {}:
+            CL = URDF_TREE.find("aero_coeffs/CL")
+            drone.CL0 = float(CL.attrib['CL0'])
+            drone.CL_alpha = float(CL.attrib['CL_alpha'])
+            drone.CL_q = float(CL.attrib['CL_q'])
+            drone.CL_del_e = float(CL.attrib['CL_del_e'])
 
-        cd = URDF_TREE.find("aero_coeffs/CD")
-        drone.CD0 = float(cd.attrib['CD0'])
-        drone.CD_q = float(cd.attrib['CD_q'])
-        drone.CD_del_e = float(cd.attrib['CD_del_e'])
+            cd = URDF_TREE.find("aero_coeffs/CD")
+            drone.CD0 = float(cd.attrib['CD0'])
+            drone.CD_q = float(cd.attrib['CD_q'])
+            drone.CD_del_e = float(cd.attrib['CD_del_e'])
 
-        cy = URDF_TREE.find("aero_coeffs/CY")
-        drone.CY0 = float(cy.attrib['CY0'])
-        drone.CY_beta = float(cy.attrib['CY_beta'])
-        drone.CY_p = float(cy.attrib['CY_p'])
-        drone.CY_r = float(cy.attrib['CY_r'])
-        drone.CY_del_r = float(cy.attrib['CY_del_r'])
-        drone.CY_del_a = float(cy.attrib['CY_del_a'])
+            cy = URDF_TREE.find("aero_coeffs/CY")
+            drone.CY0 = float(cy.attrib['CY0'])
+            drone.CY_beta = float(cy.attrib['CY_beta'])
+            drone.CY_p = float(cy.attrib['CY_p'])
+            drone.CY_r = float(cy.attrib['CY_r'])
+            drone.CY_del_r = float(cy.attrib['CY_del_r'])
+            drone.CY_del_a = float(cy.attrib['CY_del_a'])
 
-        cl = URDF_TREE.find("aero_coeffs/Cl")
-        drone.Cl_beta = float(cl.attrib['Cl_beta'])
-        drone.Cl_p = float(cl.attrib['Cl_p'])
-        drone.Cl_r = float(cl.attrib['Cl_r'])
-        drone.Cl_del_r = float(cl.attrib['Cl_del_r'])
-        drone.Cl_del_a = float(cl.attrib['Cl_del_a'])
+            cl = URDF_TREE.find("aero_coeffs/Cl")
+            drone.Cl_beta = float(cl.attrib['Cl_beta'])
+            drone.Cl_p = float(cl.attrib['Cl_p'])
+            drone.Cl_r = float(cl.attrib['Cl_r'])
+            drone.Cl_del_r = float(cl.attrib['Cl_del_r'])
+            drone.Cl_del_a = float(cl.attrib['Cl_del_a'])
 
-        cm = URDF_TREE.find("aero_coeffs/Cm")
-        drone.Cm0 = float(cm.attrib['Cm0'])
-        drone.Cm_alpha = float(cm.attrib['Cm_alpha'])
-        drone.Cm_q = float(cm.attrib['Cm_q'])
-        drone.Cm_del_e = float(cm.attrib['Cm_del_e'])
+            cm = URDF_TREE.find("aero_coeffs/Cm")
+            drone.Cm0 = float(cm.attrib['Cm0'])
+            drone.Cm_alpha = float(cm.attrib['Cm_alpha'])
+            drone.Cm_q = float(cm.attrib['Cm_q'])
+            drone.Cm_del_e = float(cm.attrib['Cm_del_e'])
 
-        cn = URDF_TREE.find("aero_coeffs/Cn")
-        drone.Cn_beta = float(cn.attrib['Cn_beta'])
-        drone.Cn_p = float(cn.attrib['Cn_p'])
-        drone.Cn_r = float(cn.attrib['Cn_r'])
-        drone.Cn_del_r = float(cn.attrib['Cn_del_r'])
-        drone.Cn_del_a = float(cn.attrib['Cn_del_a'])
+            cn = URDF_TREE.find("aero_coeffs/Cn")
+            drone.Cn_beta = float(cn.attrib['Cn_beta'])
+            drone.Cn_p = float(cn.attrib['Cn_p'])
+            drone.Cn_r = float(cn.attrib['Cn_r'])
+            drone.Cn_del_r = float(cn.attrib['Cn_del_r'])
+            drone.Cn_del_a = float(cn.attrib['Cn_del_a'])
+        else:
+            drone.CL0 = self.AERO_COEFFS['CL0']
+            drone.CL_alpha = self.AERO_COEFFS['CL_alpha']
+            drone.CL_q = self.AERO_COEFFS['CL_q']
+            drone.CL_del_e = self.AERO_COEFFS['CL_del_e']
+            drone.CD0 = self.AERO_COEFFS['CD0']
+            drone.CD_q = self.AERO_COEFFS['CD_q']
+            drone.CD_del_e = self.AERO_COEFFS['CD_del_e']
+            drone.CY0 = self.AERO_COEFFS['CY0']
+            drone.CY_beta = self.AERO_COEFFS['CY_beta']
+            drone.CY_p = self.AERO_COEFFS['CY_p']
+            drone.CY_r = self.AERO_COEFFS['CY_r']
+            drone.CY_del_r = self.AERO_COEFFS['CY_del_r']
+            drone.CY_del_a = self.AERO_COEFFS['CY_del_a']
+            drone.Cl_beta = self.AERO_COEFFS['Cl_beta']
+            drone.Cl_p = self.AERO_COEFFS['Cl_p']
+            drone.Cl_r = self.AERO_COEFFS['Cl_r']
+            drone.Cl_del_r = self.AERO_COEFFS['Cl_del_r']
+            drone.Cl_del_a = self.AERO_COEFFS['Cl_del_a']
+            drone.Cm0 = self.AERO_COEFFS['Cm0']
+            drone.Cm_alpha = self.AERO_COEFFS['Cm_alpha']
+            drone.Cm_q = self.AERO_COEFFS['Cm_q']
+            drone.Cm_del_e = self.AERO_COEFFS['Cm_del_e']
+            drone.Cn_beta = self.AERO_COEFFS['Cn_beta']
+            drone.Cn_p = self.AERO_COEFFS['Cn_p']
+            drone.Cn_r = self.AERO_COEFFS['Cn_r']
+            drone.Cn_del_r = self.AERO_COEFFS['Cn_del_r']
+            drone.Cn_del_a = self.AERO_COEFFS['Cn_del_a']
+            drone.oswald = self.AERO_COEFFS['oswald']
+
 
         Thrust = URDF_TREE.find("motor_coeffs/Thrust")
         drone.angle_deg = float(Thrust.attrib['angle_deg'])
@@ -1950,12 +1969,19 @@ class BaseAviary(gym.Env):
         KF = float(prop.attrib['kf'])
         KM = float(prop.attrib['km'])
 
-        inertia = URDF_TREE.find("link/inertial/inertia")
-        IXX = float(inertia.attrib['ixx'])
-        IYY = float(inertia.attrib['iyy'])
-        IZZ = float(inertia.attrib['izz'])
-        J = np.diag([IXX, IYY, IZZ])
-        J_INV = np.linalg.inv(J)
+        if self.GEOMETRY_COEFFS == {}:
+            inertia = URDF_TREE.find("link/inertial/inertia")
+            IXX = float(inertia.attrib['ixx'])
+            IYY = float(inertia.attrib['iyy'])
+            IZZ = float(inertia.attrib['izz'])
+            J = np.diag([IXX, IYY, IZZ])
+            J_INV = np.linalg.inv(J)
+        else:
+            IXX =  self.GEOMETRY_COEFFS['Ixx']
+            IYY =  self.GEOMETRY_COEFFS['Iyy']
+            IZZ =  self.GEOMETRY_COEFFS['Izz']
+            J = np.diag([IXX, IYY, IZZ])
+            J_INV = np.linalg.inv(J)
 
         coll = URDF_TREE.find("link/collision/geometry/cylinder")
         COLLISION_H = float(coll.attrib['length'])
@@ -1980,18 +2006,6 @@ class BaseAviary(gym.Env):
         indi_actuator_nr = int(indi.attrib['actuator_nr'])
         indi_output_nr = int(indi.attrib['output_nr'])
         G1 = np.zeros((indi_output_nr, indi_actuator_nr))
-
-        if np.array_equal(self.CTRL_GAINS, np.zeros(4)) :
-            indi = URDF_TREE.find("control")
-            for i in range(indi_output_nr):
-                vals = [str(k) for k in indi[i+1].attrib.values()]
-                G1[i] = [float(s) for s in vals[0].split(' ') if s != '']
-
-        else:
-            G1 = np.array([[self.CTRL_GAINS[0],-self.CTRL_GAINS[0],-self.CTRL_GAINS[0],self.CTRL_GAINS[0]],
-                           [self.CTRL_GAINS[1], -self.CTRL_GAINS[1], self.CTRL_GAINS[1], -self.CTRL_GAINS[1]],
-                           [-self.CTRL_GAINS[2],-self.CTRL_GAINS[2],self.CTRL_GAINS[2], self.CTRL_GAINS[2]],
-                           [self.CTRL_GAINS[3],self.CTRL_GAINS[3],self.CTRL_GAINS[3],self.CTRL_GAINS[3]]])
 
         pwm2rpm = URDF_TREE.find("control/pwm/pwm2rpm")
         # PWM2RPM_SCALE = float(pwm2rpm.attrib['scale'])

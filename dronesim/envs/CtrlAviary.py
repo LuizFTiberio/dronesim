@@ -22,7 +22,8 @@ class CtrlAviary(BaseAviary):
                  record=False,
                  obstacles=False,
                  user_debug_gui=True,
-                 ctrl_gains=np.zeros(4)
+                 geometry_coeffs={},
+                 aero_coeffs={}
                  ):
         """Initialization of an aviary environment for control applications.
 
@@ -67,7 +68,8 @@ class CtrlAviary(BaseAviary):
                          record=record,
                          obstacles=obstacles,
                          user_debug_gui=user_debug_gui,
-                         ctrl_gains=ctrl_gains
+                         geometry_coeffs=geometry_coeffs,
+                         aero_coeffs=aero_coeffs
                          )
 
     ################################################################################
