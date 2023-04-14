@@ -7,11 +7,9 @@
     <list default="true" id="45128d96-b8a0-4b10-a5f5-590b53edbfa3" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/dronesim/assets/Falcon.urdf" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/assets/Falcon.urdf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/dronesim/assets/Falcon_debug.urdf" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/assets/Falcon_debug.urdf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dronesim/assets/Falcon_opt.urdf" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/assets/Falcon_opt.urdf" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/dronesim/envs/CtrlAviary.py" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/envs/CtrlAviary.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/examples/fly_fixedwing.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/fly_fixedwing.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/examples/view_FalconGeometry.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/view_FalconGeometry.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/examples/optimization_fixedWing.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/optimization_fixedWing.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -41,13 +39,13 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "last_opened_file_path": "/home/luiztiberio/Documents/dronesim/examples/optimization_fixedWing.py"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/luiztiberio/Documents/dronesim/examples/optimization_fixedWing.py&quot;
   }
-}]]></component>
+}</component>
   <component name="PyConsoleOptionsProvider">
     <option name="myPythonConsoleState">
       <console-settings>
@@ -237,6 +235,11 @@
           <url>file://$PROJECT_DIR$/examples/Control_gains_component.py</url>
           <line>8</line>
           <option name="timeStamp" value="100" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/dronesim/envs/BaseAviary.py</url>
+          <line>1144</line>
+          <option name="timeStamp" value="102" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

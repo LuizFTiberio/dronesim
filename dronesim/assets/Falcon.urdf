@@ -64,9 +64,8 @@
   </aero_coeffs>
 
   <motor_coeffs>
-    <Thrust angle_deg = "20" x_pos = "0" y_pos = "0." z_pos = "0.1"/>
+    <ref prop_angle="0.35"/>
   </motor_coeffs>
-
 
   <link name="base_link"> 
     <inertial>

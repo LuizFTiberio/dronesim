@@ -19,12 +19,12 @@ from dronesim.utils.utils import calculate_propeller_forces_moments
 from dronesim.database.propeller_database import *
 from dronesim.utils.wind_simulation import WindSimulation
 
-filename = "../dronesim/utils/kpls_thrust.pkl"
+filename = "/home/luiztiberio/Documents/dronesim/dronesim/utils/kpls_thrust.pkl"
 with open(filename, "rb") as thrust:
    thrust_model = pickle.load(thrust)
 
 torque_model = None
-filename = "../dronesim/utils/kplsk_torque.pkl"
+filename = "/home/luiztiberio/Documents/dronesim/dronesim/utils/kplsk_torque.pkl"
 with open(filename, "rb") as torque:
    torque_model = pickle.load(torque)
 
@@ -1142,14 +1142,16 @@ class BaseAviary(gym.Env):
         # small hack to avoid smt to print everything all the time
         sys.stdout = open(os.devnull, 'w')
 
-        T1 = thrust_model.predict_values(np.array([Va, cmd_m1, alpha]).reshape((-1,3)))[0][0]
-        Q1 = torque_model.predict_values(np.array([Va, cmd_m1, alpha]).reshape((-1,3)))[0][0]
-        T2 = thrust_model.predict_values(np.array([Va, cmd_m2, alpha]).reshape((-1,3)))[0][0]
-        Q2 = torque_model.predict_values(np.array([Va, cmd_m2, alpha]).reshape((-1,3)))[0][0]
-        T3 = thrust_model.predict_values(np.array([Va, cmd_m3, alpha]).reshape((-1,3)))[0][0]
-        Q3 = torque_model.predict_values(np.array([Va, cmd_m3, alpha]).reshape((-1,3)))[0][0]
-        T4 = thrust_model.predict_values(np.array([Va, cmd_m4, alpha]).reshape((-1,3)))[0][0]
-        Q4 = torque_model.predict_values(np.array([Va, cmd_m4, alpha]).reshape((-1,3)))[0][0]
+        alpha_U = alpha - drone.prop_angle
+        alpha_L = alpha + drone.prop_angle
+        T1 = thrust_model.predict_values(np.array([Va, cmd_m1, alpha_U]).reshape((-1,3)))[0][0]
+        Q1 = torque_model.predict_values(np.array([Va, cmd_m1, alpha_U]).reshape((-1,3)))[0][0]
+        T2 = thrust_model.predict_values(np.array([Va, cmd_m2, alpha_L]).reshape((-1,3)))[0][0]
+        Q2 = torque_model.predict_values(np.array([Va, cmd_m2, alpha_L]).reshape((-1,3)))[0][0]
+        T3 = thrust_model.predict_values(np.array([Va, cmd_m3, alpha_U]).reshape((-1,3)))[0][0]
+        Q3 = torque_model.predict_values(np.array([Va, cmd_m3, alpha_U]).reshape((-1,3)))[0][0]
+        T4 = thrust_model.predict_values(np.array([Va, cmd_m4, alpha_L]).reshape((-1,3)))[0][0]
+        Q4 = torque_model.predict_values(np.array([Va, cmd_m4, alpha_L]).reshape((-1,3)))[0][0]
 
         # reverting the small hack
         sys.stdout = sys.__stdout__
@@ -1939,11 +1941,11 @@ class BaseAviary(gym.Env):
             drone.oswald = self.AERO_COEFFS['oswald']
 
 
-        Thrust = URDF_TREE.find("motor_coeffs/Thrust")
-        drone.angle_deg = float(Thrust.attrib['angle_deg'])
-        drone.x_pos = float(Thrust.attrib['x_pos'])
-        drone.y_pos = float(Thrust.attrib['y_pos'])
-        drone.z_pos = float(Thrust.attrib['z_pos'])
+        Thrust = URDF_TREE.find("motor_coeffs/ref")
+        drone.prop_angle = float(Thrust.attrib['prop_angle'])
+        #drone.x_pos = float(Thrust.attrib['x_pos'])
+        #drone.y_pos = float(Thrust.attrib['y_pos'])
+        #drone.z_pos = float(Thrust.attrib['z_pos'])
 
 
     ###############################################################################

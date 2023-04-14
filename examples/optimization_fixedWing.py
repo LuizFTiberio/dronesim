@@ -102,6 +102,8 @@ if __name__ == "__main__":
     mass_tree.attrib['value'] = str(geometry_coeffs['mass'])
     CG_tree = root.find("link/inertial/origin")
     CG_tree.attrib['xyz'] = str(geometry_coeffs['CG'])+' '+str(0)+' '+str(0)
+    motor_tree = root.find("motor_coeffs/ref")
+    motor_tree.attrib['prop_angle'] = str(geometry_coeffs['prop_angle'])
 
     # link specific data
     CG_tree = root.findall("link/inertial/origin")
@@ -400,3 +402,5 @@ if __name__ == "__main__":
     states_x = states_logger[:, 0]
     states_y = states_logger[:, 1]
     states_z = states_logger[:, 2]
+    freq = int(ARGS.simulation_freq_hz / AGGR_PHY_STEPS)
+    t = np.arange(0, len(states_x) / freq, 1 / freq)
