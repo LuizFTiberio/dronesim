@@ -6,10 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="45128d96-b8a0-4b10-a5f5-590b53edbfa3" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/dronesim/assets/Falcon.urdf" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/assets/Falcon.urdf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/dronesim/assets/Falcon_opt.urdf" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/assets/Falcon_opt.urdf" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/examples/optimization_fixedWing.py" beforeDir="false" afterPath="$PROJECT_DIR$/examples/optimization_fixedWing.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -194,9 +191,9 @@
     </configuration>
     <list>
       <item itemvalue="Python.Exec_simu" />
+      <item itemvalue="Python.Optimization_fixed_wing" />
       <item itemvalue="Python.Run_Drone" />
       <item itemvalue="Python.Run_FixedWing" />
-      <item itemvalue="Python.Optimization_fixed_wing" />
       <item itemvalue="Python.geometry" />
       <item itemvalue="Python.optimize_gains" />
     </list>
@@ -238,7 +235,7 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/dronesim/envs/BaseAviary.py</url>
-          <line>1144</line>
+          <line>1146</line>
           <option name="timeStamp" value="102" />
         </line-breakpoint>
       </breakpoints>
