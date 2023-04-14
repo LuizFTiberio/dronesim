@@ -7,6 +7,8 @@
     <list default="true" id="45128d96-b8a0-4b10-a5f5-590b53edbfa3" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/envs/BaseAviary.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dronesim/utils/kpls_thrust.pkl" beforeDir="false" afterPath="$PROJECT_DIR$/dronesim/utils/kpls_thrust.pkl" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dronesim/utils/kplsk_torque.pkl" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

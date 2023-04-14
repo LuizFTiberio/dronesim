@@ -24,7 +24,7 @@ with open(filename, "rb") as thrust:
    thrust_model = pickle.load(thrust)
 
 torque_model = None
-filename = "/home/luiztiberio/Documents/dronesim/dronesim/utils/kplsk_torque.pkl"
+filename = "/home/luiztiberio/Documents/dronesim/dronesim/utils/kpls_torque.pkl"
 with open(filename, "rb") as torque:
    torque_model = pickle.load(torque)
 
