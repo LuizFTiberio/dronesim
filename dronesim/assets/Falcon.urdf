@@ -39,7 +39,7 @@
     <indi_4 thrust=" 800 800 800 800" />
 
     <indi_guidance_gains>
-      <pos kp="0.75" kd=".85"/>
+      <pos kp="0.8" kd=".85"/>
     </indi_guidance_gains>
 
     <indi_att_gains>

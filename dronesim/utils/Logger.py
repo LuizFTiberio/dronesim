@@ -215,6 +215,8 @@ class Logger(object):
         col = 0
 
         #### XYZ ###################################################
+        if len(t) != len(self.states[0, 0, :]):
+            t = t[:-1]
         row = 0
         for j in range(self.NUM_DRONES):
             axs[row, col].plot(t, self.states[j, 0, :], label="drone_"+str(j))

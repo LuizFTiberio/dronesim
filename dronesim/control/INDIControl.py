@@ -453,19 +453,23 @@ class INDIControl(BaseControl):
         """
         self.control_counter += 1
 
-        nav_carrot,gi_speed_sp = self._CircleNavigation(control_timestep,
-                                              cur_pos,
-                                              target_pos)
+        nav_type = target_pos[-1]
+        target_pos = target_pos[:-1].astype(float)
 
-        #nav_carrot = self._WayPointNavigation(control_timestep,
-        #                                      cur_pos,
-        #                                      target_pos)
+        if nav_type == 'line':
+            nav_carrot = self._WayPointNavigation(control_timestep,
+                                                 cur_pos,
+                                                 target_pos)
 
-        #gi_speed_sp = self._compute_guidance_indi_run_pos(control_timestep,
-        #                       cur_pos,
-        #                       cur_vel,
-        #                       nav_carrot
-        #                       )
+            gi_speed_sp = self._compute_guidance_indi_run_pos(control_timestep,
+                                  cur_pos,
+                                  cur_vel,
+                                  nav_carrot
+                                  )
+        elif nav_type == 'circle':
+            nav_carrot,gi_speed_sp = self._CircleNavigation(control_timestep,
+                                                  cur_pos,
+                                                  target_pos)
 
         sp_accel = self._compute_accel_from_speed_sp(control_timestep, cur_quat, cur_vel, gi_speed_sp,
                                                      current_wind)
@@ -1113,9 +1117,9 @@ class INDIControl(BaseControl):
             The current position error.
 
         """
-        circle_radius = 150
+        circle_radius = 200
         GUIDANCE_INDI_NAV_CIRCLE_DIST = 40
-        circle_center = np.array([0,0,0])
+        circle_center = np.array([150,0,0])
         pos_diff = cur_pos[0:2]-circle_center[0:2]
         circle_qdr = np.arctan2(pos_diff[1],pos_diff[0])
         progress_angle = GUIDANCE_INDI_NAV_CIRCLE_DIST/circle_radius
