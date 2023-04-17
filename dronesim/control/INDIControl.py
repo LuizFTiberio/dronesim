@@ -413,7 +413,7 @@ class INDIControl(BaseControl):
                        cur_vel,
                        cur_ang_vel,
                        target_pos,
-                       current_wind = np.zeros(6),
+                       current_wind,
                        target_rpy=np.zeros(3),
                        target_vel=np.zeros(3),
                        target_rpy_rates=np.zeros(3)
@@ -452,19 +452,20 @@ class INDIControl(BaseControl):
 
         """
         self.control_counter += 1
-        #print(self.control_counter)
-        #if self.control_counter == 7:
-        #    print('stop')
 
-        nav_carrot = self._WayPointNavigation(control_timestep,
+        nav_carrot,gi_speed_sp = self._CircleNavigation(control_timestep,
                                               cur_pos,
                                               target_pos)
 
-        gi_speed_sp = self._compute_guidance_indi_run_pos(control_timestep,
-                               cur_pos,
-                               cur_vel,
-                               nav_carrot
-                               )
+        #nav_carrot = self._WayPointNavigation(control_timestep,
+        #                                      cur_pos,
+        #                                      target_pos)
+
+        #gi_speed_sp = self._compute_guidance_indi_run_pos(control_timestep,
+        #                       cur_pos,
+        #                       cur_vel,
+        #                       nav_carrot
+        #                       )
 
         sp_accel = self._compute_accel_from_speed_sp(control_timestep, cur_quat, cur_vel, gi_speed_sp,
                                                      current_wind)
@@ -674,7 +675,6 @@ class INDIControl(BaseControl):
         # Rotate angular velocity to body frame
         cur_ang_vel = R_pyb.T.dot(cur_ang_vel)
 
-
         # Calculate the angular acceleration via finite difference
         if self.control_counter == 1:
             angular_accel = np.zeros(3)
@@ -752,9 +752,9 @@ class INDIControl(BaseControl):
             The current position error.
 
         """
-        K_beta = 30
+        K_beta = 40
         GUIDANCE_INDI_PITCH_EFF_SCALING = 1.0
-        liftd_asq =  0.20
+        liftd_asq =  0.16
         liftd_p80 = liftd_asq * 12 * 12
         liftd_p50 = liftd_p80/2
 
@@ -776,8 +776,8 @@ class INDIControl(BaseControl):
 
         pitch_lift = theta
         pitch_lift = np.clip(pitch_lift,-np.pi/2,0)
-        lift = np.sin(pitch_lift) * 9.81
-        T = -np.cos(pitch_lift)* 9.81
+        lift = np.sin(pitch_lift) * self.GRAVITY#9.81
+        T = -np.cos(pitch_lift) * 10
 
         pitch_interp = np.degrees(theta)
         min_pitch = -80.0
@@ -822,7 +822,7 @@ class INDIControl(BaseControl):
         euler_cmd = Gmat_inv.dot(a_diff)
         thrust = euler_cmd[2]
 
-        max_phi = np.radians(45)
+        max_phi = np.radians(40)
         airspeed_turn = np.clip(airspeed,10,30)
         guidance_euler_cmd = np.zeros(3)
         guidance_euler_cmd[0] = phi + euler_cmd[0]
@@ -908,7 +908,6 @@ class INDIControl(BaseControl):
         gi_speed_sp = np.zeros(3)
         pos_err = target_pos - cur_pos
 
-
         gi_speed_sp[0] = pos_err[0] * self.guidance_indi_pos_gain
         gi_speed_sp[1] = pos_err[1] * self.guidance_indi_pos_gain
         gi_speed_sp[2] = pos_err[2] * self.guidance_indi_pos_gain*1.2
@@ -956,7 +955,7 @@ class INDIControl(BaseControl):
 
         """
         guidance_indi_max_airspeed = 25
-        heading_bank_gain = 40
+        heading_bank_gain = 8
         speed_gain =self.guidance_indi_speed_gain
         speed_gainz = self.guidance_indi_speed_gain*1.5
 
@@ -983,8 +982,8 @@ class INDIControl(BaseControl):
         steady_state = current_wind[0:3]
         gust = current_wind[3:6]
         # convert wind vector from world to body frame and add gust
-        windspeed = R_vb @ steady_state + gust
-        desired_airspeed = gi_speed_sp - windspeed
+        windspeed =  R_vb @steady_state + gust
+        desired_airspeed = gi_speed_sp[0:2] - windspeed[0:2]
         norm_des_as = np.linalg.norm(desired_airspeed)
 
         if airspeed > 10 and norm_des_as > 12:
@@ -1070,9 +1069,9 @@ class INDIControl(BaseControl):
 
         """
         CLOSE_TO_WAYPOINT = 20
-        NAV_CARROT_DIST = 12
+        NAV_CARROT_DIST = 6
         path_to_waypoint = target_pos - cur_pos
-        path_to_waypoint = np.clip(path_to_waypoint,-150,150)
+        path_to_waypoint = np.clip(path_to_waypoint,-15,15)
         dist_to_waypoint = np.linalg.norm(path_to_waypoint)
         if (dist_to_waypoint < CLOSE_TO_WAYPOINT):
             nav_carrot = target_pos
@@ -1080,5 +1079,64 @@ class INDIControl(BaseControl):
             path_to_carrot= path_to_waypoint * NAV_CARROT_DIST/dist_to_waypoint
             nav_carrot = target_pos + path_to_carrot
         return nav_carrot
+
+
+
+    def _CircleNavigation(self,control_timestep,cur_pos,target_pos):
+
+        """ENAC generic wp navigation
+
+        Parameters
+        ----------
+        control_timestep : float
+            The time step at which control is computed.
+        cur_pos : ndarray
+            (3,1)-shaped array of floats containing the current position.
+        cur_quat : ndarray
+            (4,1)-shaped array of floats containing the current orientation as a quaternion.
+        cur_vel : ndarray
+            (3,1)-shaped array of floats containing the current velocity.
+        target_pos : ndarray
+            (3,1)-shaped array of floats containing the desired position.
+        target_rpy : ndarray
+            (3,1)-shaped array of floats containing the desired orientation as roll, pitch, yaw.
+        target_vel : ndarray
+            (3,1)-shaped array of floats containing the desired velocity.
+
+        Returns
+        -------
+        float
+            The target thrust along the drone z-axis.
+        ndarray
+            (3,1)-shaped array of floats containing the target roll, pitch, and yaw.
+        float
+            The current position error.
+
+        """
+        circle_radius = 150
+        GUIDANCE_INDI_NAV_CIRCLE_DIST = 40
+        circle_center = np.array([0,0,0])
+        pos_diff = cur_pos[0:2]-circle_center[0:2]
+        circle_qdr = np.arctan2(pos_diff[1],pos_diff[0])
+        progress_angle = GUIDANCE_INDI_NAV_CIRCLE_DIST/circle_radius
+        progress_angle = np.clip(progress_angle,np.pi/16,np.pi/4)
+        alpha = circle_qdr - progress_angle
+        nav_target_x = circle_center[0] + np.cos(alpha) * circle_radius
+        nav_target_y = circle_center[1] + np.sin(alpha) * circle_radius
+
+        radius_diff = np.abs(np.linalg.norm(pos_diff) - circle_radius)
+        if radius_diff > GUIDANCE_INDI_NAV_CIRCLE_DIST:
+            desired_speed = radius_diff * self.guidance_indi_pos_gain
+        else:
+            desired_speed = 18#np.sqrt(9.81 * circle_radius * np.tan(np.radians(45)/2.))
+        desired_speed = np.clip(desired_speed,0,20)
+        speed_unit = np.array([nav_target_x,nav_target_y])-cur_pos[0:2]
+        speed_unit = speed_unit/np.linalg.norm(speed_unit)
+        nav_speed = speed_unit* desired_speed
+
+        altitude_error = 40-cur_pos[2]
+        nav_speed_z = np.clip(altitude_error* self.guidance_indi_pos_gain*1.6,-4,4)
+
+        return np.array([nav_target_x,nav_target_y,40]),np.array([nav_speed[0],nav_speed[1],nav_speed_z])
 
 #EOF
