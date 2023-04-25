@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     #### Define and parse (optional) arguments for the script ##
     parser = argparse.ArgumentParser(description='Helix flight script using CtrlAviary or VisionAviary and DSLPIDControl')
-    parser.add_argument('--drone',              default=['Falcon'],  type=list,    help='Drone model (default: CF2X)', metavar='', choices=[DroneModel])
+    parser.add_argument('--drone',              default=['fixed_wing'],  type=list,    help='Drone model (default: CF2X)', metavar='', choices=[DroneModel])
     parser.add_argument('--num_drones',         default=1,          type=int,           help='Number of drones (default: 3)', metavar='')
     parser.add_argument('--physics',            default="pyb",      type=Physics,       help='Physics updates (default: PYB)', metavar='', choices=Physics)
     parser.add_argument('--vision',             default=False,      type=str2bool,      help='Whether to use VisionAviary (default: False)', metavar='')
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--obstacles',          default=False,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
     parser.add_argument('--simulation_freq_hz', default=240,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
     parser.add_argument('--control_freq_hz',    default=96,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--duration_sec',       default=115,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
+    parser.add_argument('--duration_sec',       default=5,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
     ARGS = parser.parse_args()
 
     #### Initialize the simulation #############################
@@ -53,11 +53,11 @@ if __name__ == "__main__":
     R = .6
     AGGR_PHY_STEPS = int(ARGS.simulation_freq_hz/ARGS.control_freq_hz) if ARGS.aggregate else 1
 
-    INIT_XYZS = np.array([[-100., -100., 40]])
+    INIT_XYZS = np.array([[0., 0, 40]])
 
     ## To forward X ###
     INIT_RPYS = np.array([[0, 0, 0]])
-    INIT_VELS = np.array([[18, 0., 0]])
+    INIT_VELS = np.array([[14, 0., 0]])
     target_vel = np.array([0, 0, 0])
 
 
@@ -67,9 +67,7 @@ if __name__ == "__main__":
     NUM_WP = ARGS.control_freq_hz*PERIOD
     trajectory_setpoints = np.array([
 
-                                     [0,-100,40],
-                                     [0,300,40],
-                                     [0, -100, 40],
+                                     [200,0,60],
                                     ])
     ARRIVED_AT_WAYPOINT = 10
 
@@ -124,7 +122,7 @@ if __name__ == "__main__":
     wind = WindSimulation(1 / ARGS.simulation_freq_hz)
     #### Run the simulation ####################################
     CTRL_EVERY_N_STEPS = int(np.floor(env.SIM_FREQ/ARGS.control_freq_hz))
-    action = {str(i): np.array([.95,.95,.95,.95]) for i in range(ARGS.num_drones)}
+    action = {str(i): np.array([0.,0.,0.,1]) for i in range(ARGS.num_drones)}
 
     START = time.time()
 
@@ -137,6 +135,8 @@ if __name__ == "__main__":
         if i%CTRL_EVERY_N_STEPS == 0:
 
             x, y, z, = obs[str(0)]["state"][0:3]
+            if z < 10:
+                break
             target_pos = trajectory_setpoints[0]
             diff = target_pos - np.array([x,y,z])
             diff_norm = np.linalg.norm(diff)
@@ -148,17 +148,19 @@ if __name__ == "__main__":
                 except:
                     print("*******LAST SETPOINT VISITED ********")
                     break
-            #print(x,y,target_pos)
 
             #### Compute control for the current way point #############
             for j in range(ARGS.num_drones):
+                state = obs[str(j)]["state"]
+                states_logger.append(state)
                 action[str(j)], _, _ = ctrl[j].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
                                                                        state=obs[str(j)]["state"],
                                                                        target_pos= target_pos,##TARGET_POS[wp_counters[j]],
                                                                        target_vel=target_vel,
-                                                                       current_wind = current_wind.reshape((6)))
+                                                                       current_wind = current_wind.reshape((6)),
+                                                                       nav_type = 'GVF')
                 # Over-write the action
-                #action[str(j)] = np.array([.95,.95,.95,.95])
+                #action[str(j)] = np.array([.5,1.,.5,1.])
 
 
         #### Camera View follows the vehicle #######################
@@ -170,9 +172,6 @@ if __name__ == "__main__":
                                          cameraTargetPosition=[x, y, z],
                                          physicsClientId=PYB_CLIENT
                                          )
-
-        state = obs[str(0)]["state"]
-        states_logger.append(state)
 
         #### Log the simulation ####################################
         for j in range(ARGS.num_drones):
@@ -209,7 +208,25 @@ if __name__ == "__main__":
     if ARGS.plot:
         logger.plot()
 
+    angle = np.arange(0, 2 * np.pi, 0.01)
+    nominal_traj_x = 250 * np.cos(angle)
+    nominal_traj_y = 250 * np.sin(angle)
+
     states_logger = np.array(states_logger)
+    logging_freq_hz = int(ARGS.simulation_freq_hz / AGGR_PHY_STEPS)
     states_x = states_logger[:, 0]
     states_y = states_logger[:, 1]
     states_z = states_logger[:, 2]
+    t = np.arange(0, len(states_z) / logging_freq_hz, 1 / logging_freq_hz)
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+    axs[0].plot(states_y, states_x, label='real traj')
+    axs[0].plot(nominal_traj_y, nominal_traj_x, '.',color = 'blue', label = 'desired traj')
+    axs[0].set_xlabel('Y [m]')
+    axs[0].set_ylabel('X [m]')
+    axs[0].legend(loc='upper right')
+    axs[1].plot(t, states_z)
+    axs[1].set_xlabel('time [s]')
+    axs[1].set_ylabel('Z [m]')
+    axs[0].set_aspect(1)
+    # axs[1].set_aspect(1)
+    plt.show()

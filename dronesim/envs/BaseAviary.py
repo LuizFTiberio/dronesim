@@ -24,13 +24,12 @@ with open(filename, "rb") as thrust:
    thrust_model = pickle.load(thrust)
 
 torque_model = None
-filename = "/home/luiztiberio/Documents/dronesim/dronesim/utils/kpls_torque.pkl"
+filename = "/home/luiztiberio/Documents/dronesim/dronesim/utils/kplsk_torque.pkl"
 with open(filename, "rb") as torque:
    torque_model = pickle.load(torque)
 
 # for fixed-wing vehicle's physics
-from dronesim.utils.utils import R_aero_to_body
-
+from dronesim.utils.utils import R_aero_to_body,Quaternion2Rotation
 
 class DroneModel(Enum):
     """Drone models enumeration class."""
@@ -205,6 +204,8 @@ class BaseAviary(gym.Env):
                 self._parseURDFFixedwingParameters(drone, urdf)
             if 'winged_vtol_physics' in drone.TYPE:
                 self._parseURDFVTOLParameters(drone, urdf)
+            if 'winged_physics' in drone.TYPE:
+                self._parseURDFVTOLParameters(drone, urdf)
 
         #### Compute constants #####################################
 #        self.GRAVITY = self.G*self.M
@@ -300,7 +301,6 @@ class BaseAviary(gym.Env):
 
         self.INIT_VELS = initial_vels
         #print('INIT',self.INIT_VELS)
-
 
         if initial_rpys is None:
             self.INIT_RPYS = np.zeros((self.NUM_DRONES, 3))
@@ -772,6 +772,12 @@ class BaseAviary(gym.Env):
         nth_drone : int
             The ordinal number/position of the desired drone in list self.DRONE_IDS.
         """
+        pyb.changeDynamics(1, -1, linearDamping=0, angularDamping=0)
+        pyb.changeDynamics(1, 0, linearDamping=0, angularDamping=0)
+        pyb.changeDynamics(1, 1, linearDamping=0, angularDamping=0)
+        pyb.changeDynamics(1, 2, linearDamping=0, angularDamping=0)
+        pyb.changeDynamics(1, 3, linearDamping=0, angularDamping=0)
+        pyb.changeDynamics(1, 4, linearDamping=0, angularDamping=0)
         if 'quad' in self.drones[nth_drone].TYPE:
             self._quad_copter_physics(cmd,nth_drone)
         elif 'morphing_hexa' in self.drones[nth_drone].TYPE:
@@ -784,6 +790,8 @@ class BaseAviary(gym.Env):
             self._coaxial_birotor_physics(cmd,nth_drone)
         elif 'winged_vtol_physics' in self.drones[nth_drone].TYPE:
             self._winged_vtol_physics(cmd,nth_drone,current_wind)
+        elif '_winged_physics' in self.drones[nth_drone].TYPE:
+            self._winged_physics(cmd,nth_drone,current_wind)
         else:
             rpm = self.drones[nth_drone].PWM2RPM_SCALE * cmd + self.drones[nth_drone].PWM2RPM_CONST
             # rpm = 20000.*cmd
@@ -807,283 +815,6 @@ class BaseAviary(gym.Env):
 
     ################################################################################
 
-    def _fixed_wing_physics(self,
-                 cmd,
-                 nth_drone
-                 ):
-        ''' Fixed wing aerodynamics '''
-
-        #### Current state in Inertial Frame #############################
-        pos = self.pos[nth_drone,:]
-        quat = self.quat[nth_drone,:]
-        rpy = self.rpy[nth_drone,:]
-        vel = self.vel[nth_drone,:]
-        rvel = self.ang_v[nth_drone,:]
-
-        # Rotate inertial velocity to body frame
-        R = np.array(pyb.getMatrixFromQuaternion(quat)).reshape(3, 3)
-        vel_b = R.T.dot(vel)
-        rvel_b = R.T.dot(rvel)
-        gamma = np.arcsin(vel[2]/np.linalg.norm(vel))
-        alpha = -rpy[1]-gamma # Assuming no WIND ! and using pitch angle as Angle of Attack
-        beta  = np.arctan(vel_b[1]/vel_b[0])
-        V_air = vel_b[0] if vel_b[0] > 0. else 0. #np.linalg.norm(vel) # FIX ME get real airspeed along x axis with wind 
-        rho   = 1.225 # Get this as a function of altitude... pos[2]
-        Pdyn  = 0.5*rho*V_air*V_air
-
-
-        def get_f_aero_coef(alpha, beta, rvel, Uctrl, drone):
-            """
-            return aero coefficients for forces
-            """
-            d_alpha = alpha - drone.alpha0
-            nrvel = rvel*np.array([drone.Bref, drone.Cref, drone.Bref])/2/drone.Vref # FIXME va??
-            CL = drone.CL0 + drone.CL_alpha*d_alpha + drone.CL_beta*beta + np.dot(drone.CL_omega,nrvel) + np.dot(drone.CL_ctrl,Uctrl)
-            CD = drone.CD0 + drone.CD_k1*CL + drone.CD_k2*(CL**2) + np.dot(drone.CD_ctrl,Uctrl)
-            CY = drone.CY_alpha*d_alpha + drone.CY_beta*beta + np.dot(drone.CY_omega,nrvel) + np.dot(drone.CY_ctrl,Uctrl)
-            return [CL, CY, CD]
-
-        def get_f_aero_body(va, alpha, beta, rvel, Uctrl, drone, Pdyn):
-            """
-            return aerodynamic forces in body frame
-            """
-            CL, CY, CD = get_f_aero_coef(alpha, beta, rvel, Uctrl, drone)
-            F_aero_body = Pdyn*drone.Sref*np.array([-CD, -CY, CL]) #np.dot(R_aero_to_body(alpha, beta), [-CD, -CY, CL])#[-CD, CY, -CL]) # [-CD, CY, CL] #
-            return F_aero_body
-
-        def get_m_aero_coef(alpha, beta, rvel, Uctrl, drone):
-            d_alpha = alpha - drone.alpha0
-            nrvel =  rvel*np.array([drone.Bref, drone.Cref, drone.Bref])/2/drone.Vref
-            Cl = drone.Cl_alpha*d_alpha + drone.Cl_beta*beta +\
-                 np.dot(drone.Cl_omega,nrvel) + np.dot(drone.Cl_ctrl,Uctrl)
-            Cm = drone.Cm0 + drone.Cm_alpha*d_alpha + drone.Cm_beta*beta +\
-                 np.dot(drone.Cm_omega,nrvel) + np.dot(drone.Cm_ctrl,Uctrl)
-            Cn = drone.Cn_alpha*d_alpha + drone.Cn_beta*beta +\
-                 np.dot(drone.Cn_omega,nrvel) + np.dot(drone.Cn_ctrl,Uctrl)
-            return Cl, Cm, Cn
-
-        def get_m_aero_body(va, alpha, beta, rvel, Uctrl, drone, Pdyn):
-            Cl, Cm, Cn = get_m_aero_coef(alpha, beta, rvel, Uctrl, drone)
-            return Pdyn*drone.Sref*np.array([-Cl*drone.Bref, Cm*drone.Cref, -Cn*drone.Bref])
-
-        F_aero_body = get_f_aero_body(V_air, alpha, beta, rvel_b, cmd, self.drones[nth_drone], Pdyn)
-        M_aero_body = get_m_aero_body(V_air, alpha, beta, rvel_b, cmd, self.drones[nth_drone], Pdyn)
-
-        rpm = self.drones[nth_drone].PWM2RPM_SCALE * cmd + self.drones[nth_drone].PWM2RPM_CONST
-        prop_force = np.array(rpm**2)*self.drones[nth_drone].KF
-
-        # F_aero_body = np.zeros(3)
-        # M_aero_body = np.zeros(3)
-        print(F_aero_body, M_aero_body)
-        print(f'Airspeed :{V_air:.2f}, VX : {vel[0]:.2f}, VZ : {vel[2]:.2f}, Alpha : {alpha:.3f}, Beta : {beta:.3f} Gamma : {gamma:.3f} Prop Foce : {prop_force[0]:.2f} , {prop_force[1]:.2f}')
-
-        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                            -1, # to base link : fuselage
-                            forceObj=[F_aero_body[0],F_aero_body[1],F_aero_body[2]],
-                            posObj=[0, 0, 0],
-                            flags=pyb.LINK_FRAME,
-                            physicsClientId=self.CLIENT
-                            )
-        for i in range(2):
-            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                            i, # to propeller axis
-                            forceObj=[prop_force[i],0,0],
-                            posObj=[0, 0, 0],
-                            flags=pyb.LINK_FRAME,
-                            physicsClientId=self.CLIENT
-                            )
-
-        pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                            2, # to center of mass - Check this for different configurations - Will not work generically :(
-                            torqueObj=[M_aero_body[0],M_aero_body[1],M_aero_body[2]],
-                            flags=pyb.LINK_FRAME,  # FIX ME : see https://github.com/bulletphysics/bullet3/issues/1949
-                            physicsClientId=self.CLIENT
-                            )
-
-    ################################################################################
-    def _tail_sitter_physics(self,cmd,nth_drone):
-        '''%% AERO aerodynamic forces and moments computation (in a wing section!)
-        %
-        %  this function computes the aerodynamic forces and moments in body axis
-        %    in view of Phi-theory in a wing section. it includes propwash effects 
-        %    due to thrust.
-        %
-        %  INPUTS:
-        %    state def. : x = (vl wb q)     in R(10x1)
-        %    thrust     : T (N)             in R( 3x1)
-        %    elevon def.: delta (rad)       in R( 1x1)
-        %    motor speed: w (rad/s)         in R( 1x1)
-        %    drone specs: drone             struct
-        %    + required drone specs: 
-        %    |---- PHI                      in R( 6x6)
-        %    |---- RHO (kg/m^3)             in R( 1x1)
-        %    |---- WET_SURFACE (m^2)        in R( 1x1)
-        %    |---- DRY_SURFACE (m^2)        in R( 1x1)
-        %    |---- PHI_n                    in R( 1x1)
-        %    |---- CHORD (m)                in R( 1x1)
-        %    |---- WINGSPAN (m)             in R( 1x1)
-        %    |       (of the wing section, half of full drone)
-        %    |---- PROP_RADIUS (m)          in R( 1x1)
-        %    |---- ELEVON_MEFFICIENCY       in R( 3x1)
-        %    |---- ELEVON_FEFFICIENCY       in R( 3x1)
-        %
-        %  OUTPUTS:
-        %    Aero force : Fb (body axis)    in R( 3x1) 
-        %    Aero moment: Mb (body axis)    in R( 3x1) 
-        %
-        %  vl: vehicle velocity in NED axis (m/s) [3x1 Real]
-        %  wb: vehicle angular velocity in body axis (rad/s) [3x1 Real]
-        %  q:  quaternion attitude (according to MATLAB convention) [4x1 Real]
-        %
-        %  NOTE1: notice that w's sign depend on which section we are due to
-        %    counter-rotating propellers;
-        %  NOTE2: elevon sign convention is positive pictch-up deflections.
-        %  
-        %  refer to [1] for further information.
-        % 
-        %  REFERENCES
-        %    [1] Lustosa L.R., Defay F., Moschetta J.-M., "The Phi-theory 
-        %    approach to flight control design of tail-sitter vehicles"
-        %    @ http://lustosa-leandro.github.io '''
-
-        # data extraction from drone struct
-        # PHI_fv = drone.PHI[0:3,0:3]
-        # PHI_mv = drone.PHI[3:6,0:3]
-        # PHI_mw = drone.PHI[3:6,3:6]
-        # phi_n  = drone.PHI_n
-        # RHO    = drone.RHO
-        # Swet   = drone.WET_SURFACE
-        # Sdry   = drone.DRY_SURFACE
-        # chord  = drone.CHORD
-        # ws     = drone.WINGSPAN
-        # Prop_R = drone.PROP_RADIUS
-        # Thetam = drone.ELEVON_MEFFICIENCY
-        # Thetaf = drone.ELEVON_FEFFICIENCY
-        # PHI = np.array([[0., 0., 0., 0., 0., 0.],
-        #                 [0., 0., 0., 0., 0., 0.],
-        #                 [0., 0., 0., 0., 0., 0.],
-        #                 [0., 0., 0., 0., 0., 0.],
-        #                 [0., 0., 0., 0., 0., 0.],
-        #                 [0., 0., 0., 0., 0., 0.]])
-        # PHI_fv = PHI[0:3,0:3]
-        # PHI_mv = PHI[3:6,0:3]
-        # PHI_mw = PHI[3:6,3:6]
-
-
-        Cd0    = 0.025
-        Cy0    = 0.1
-        phi_n  = 0.
-        RHO    = 1.225
-        Swet   = 0.0743
-        Sdry   = 0.
-        chord  = 0.13
-        dR     = -0.1*chord
-        ws     = 0.55
-        Prop_R = 0.125
-        Thetam = np.array([0., 0.93, 0.])
-        Thetaf = np.array([0., 0.48, 0.])
-
-        PHI_fv = np.diag([Cd0, Cy0, (2*np.pi+Cd0)])
-        PHI_mv = np.array([[0., 0., 0.], [0., 0., -1/chord*dR*(2*np.pi+Cd0)], [0., 1/ws*dR*Cy0, 0.]])
-        PHI_mw = 0.5*np.diag([0.47, 0.54, 0.52])
-        # derivative data
-        Sp = np.pi*Prop_R**2
-
-        #### Current state in Inertial Frame #############################
-        pos = self.pos[nth_drone,:]
-        quat = self.quat[nth_drone,:]
-        rpy = self.rpy[nth_drone,:]
-        vl = self.vel[nth_drone,:]
-        rvel = self.ang_v[nth_drone,:]
-
-        # Rotate inertial velocity to body frame
-        R = np.array(pyb.getMatrixFromQuaternion(quat)).reshape(3, 3)
-        vel_b = R.T.dot(vl)
-        wb = R.T.dot(rvel)
-        # gamma = np.arcsin(vel[2]/np.linalg.norm(vel))
-        # alpha = -rpy[1]-gamma # Assuming no WIND ! and using pitch angle as Angle of Attack
-        # beta  = np.arctan(vel_b[1]/vel_b[0])
-        # V_air = vel_b[0] if vel_b[0] > 0. else 0. #np.linalg.norm(vel) # FIX ME get real airspeed along x axis with wind 
-        # rho   = 1.225 # Get this as a function of altitude... pos[2]
-        # Pdyn  = 0.5*rho*V_air*V_air
-
-
-        # state demultiplexing
-        # vl = x[0:3]
-        # wb = x[3:6]
-        # q  = x[6:10]
-
-        # DCM computation
-        # D = q2dcm(q.T) # q2dcm(q')
-
-        # freestream velocity computation in body frame
-        # vinf = D*(vl-w)
-        # Also pretent like the vehicle is horizontal like in phi-theory paper body frame definition. 
-        vinf = np.array([vel_b[2], -vel_b[1], vel_b[0]]) # FIXME
-        wb = np.array([wb[2], -wb[1], wb[0]])
-        wb = np.zeros(3)
-        print('Vinf in phi-body : ',vinf)
-
-        # computation of total wing section area
-        S = Swet + Sdry
-
-        # computation of chord matrix
-        B = np.diag([ws, chord, ws])
-
-        # eta computation
-        eta = np.sqrt( np.linalg.norm(vinf)**2 + phi_n*np.linalg.norm( B.dot(wb) )**2 )
-
-        rpm = self.drones[nth_drone].PWM2RPM_SCALE * cmd + self.drones[nth_drone].PWM2RPM_CONST
-        prop_force = np.array(rpm**2)*self.drones[nth_drone].KF
-        # Apply propeller thrust : specific to this vehicle at 0 and 1 for left and right prop.
-
-        for i in range(2):
-            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                             i,
-                             forceObj=[0.,0.,prop_force[i]],
-                             posObj=[0, 0, 0],
-                             flags=pyb.LINK_FRAME,
-                             physicsClientId=self.CLIENT
-                             )
-
-        # F = np.zeros(3)
-        # M = np.zeros(3)
-        i=3 # left wing link id (4 is right wing)
-        for T,delta in zip(prop_force[:2],cmd[2:]): #FIXME : using the motors whicha re the first 2 of prop_force, and elevon which are the last 2 of cmd... Make it more generic
-            T = np.array([T, 0., 0.])
-            delta = delta*np.deg2rad(30.) # cmd is -1/+1, representing +-30deg flap deflection 
-            # force computation
-            # airfoil contribution
-            Fb = -1/2*RHO*S*eta*PHI_fv.dot(vinf) - 1/2*RHO*S*eta*PHI_mv.dot(B.dot(wb) ) - 1/2*Swet/Sp*PHI_fv.dot(T)
-            # elevon contribution
-            Fb = Fb + 1/2*RHO*S*eta*PHI_fv.dot(np.cross(delta*Thetaf,vinf))+ 1/2*RHO*S*eta*PHI_mv.dot(B.dot(np.cross(delta*Thetaf,wb))) + 1/2*Swet/Sp*PHI_fv.dot(np.cross(delta*Thetaf,T))
-            # moment computation
-            # airfoil contribution
-            Mb = -1/2*RHO*S*eta*B.dot(PHI_mv.dot(vinf)) - 1/2*RHO*S*eta*B.dot(PHI_mw.dot(B.dot(wb) )) - 1/2*Swet/Sp*B.dot(PHI_mv.dot(T))
-            # elevon contribution
-            Mb = Mb + 1/2*RHO*S*eta*B.dot(PHI_mv.dot(np.cross(delta*Thetam,vinf))) + 1/2*RHO*S*eta*B.dot(PHI_mw.dot(B.dot(np.cross(delta*Thetam,wb)))) + 1/2*Swet/Sp*B.dot(PHI_mv.dot(np.cross(delta*Thetam,T)))
-            print(f' {i}- Fb : {Fb} Mb : {Mb} CMD : {cmd}')
-
-            # Directly apply force and moments to each wing links (left and right)
-            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                                i,
-                                forceObj=[Fb[2], 0., 0.], #[Fb[2],-Fb[1],Fb[0]],# [0., 0., 0.],#
-                                posObj=[0, 0, 0],
-                                flags=pyb.LINK_FRAME,
-                                physicsClientId=self.CLIENT
-                                )
-            pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                                i, # to base link : fuselage
-                                torqueObj=[0., -Mb[1], 0.],#[M[0],M[1],M[2]],
-                                flags=pyb.LINK_FRAME, #FIX ME FIXME
-                                physicsClientId=self.CLIENT
-                                )
-            i+=1
-
-        # print([F, M])
-        # return [Fb, Mb]
-
-    ################################################################################
 
     def _winged_vtol_physics(self,
                             cmd,
@@ -1098,11 +829,12 @@ class BaseAviary(gym.Env):
         # calculate atm data
         quaternion = self.quat[nth_drone, :]
         cur_rpy = np.array(pyb.getEulerFromQuaternion(quaternion))
+        quaternion = np.array([quaternion[3],quaternion[0],quaternion[1],quaternion[2]])
+        #cur_rpy = np.array(pyb.getEulerFromQuaternion(quaternion))
         u,v,w = self.vel[nth_drone, :]
-        R_vb = np.array(pyb.getMatrixFromQuaternion(quaternion)).reshape(3, 3)
-
-        # We now correct R_vb from Pybullet frame to wind frame
-        R_vb = R_vb @ np.array([[1,0,0],[0,-1,0],[0,0,-1]])
+        #w *= -1
+        #v *= -1
+        R_vb = Quaternion2Rotation(quaternion).T
 
         steady_state = current_wind[0:3]
         gust = current_wind[3:6]
@@ -1136,24 +868,22 @@ class BaseAviary(gym.Env):
         # Passing to wind frame
         p,q,r = np.array([[1,0,0],[0,-1,0],[0,0,-1]]) @self.ang_v[nth_drone, :]
 
-        cmd_m1 = cmd[0] * (2800) + 200
-        cmd_m2 = cmd[1] * (2800) + 200
-        cmd_m3 = cmd[2] * (2800) + 200
-        cmd_m4 = cmd[3] * (2800) + 200
+        cmd_m1 = cmd[0] *1570+730
+        cmd_m2 = cmd[1] *1570+730
+        cmd_m3 = cmd[2] *1570+730
+        cmd_m4 = cmd[3] *1570+730
 
         # small hack to avoid smt to print everything all the time
         sys.stdout = open(os.devnull, 'w')
-
-        alpha_U = alpha - drone.prop_angle
-        alpha_L = alpha + drone.prop_angle
-        T1 = thrust_model.predict_values(np.array([Va, cmd_m1, alpha_U]).reshape((-1,3)))[0][0]
-        Q1 = torque_model.predict_values(np.array([Va, cmd_m1, alpha_U]).reshape((-1,3)))[0][0]
-        T2 = thrust_model.predict_values(np.array([Va, cmd_m2, alpha_L]).reshape((-1,3)))[0][0]
-        Q2 = torque_model.predict_values(np.array([Va, cmd_m2, alpha_L]).reshape((-1,3)))[0][0]
-        T3 = thrust_model.predict_values(np.array([Va, cmd_m3, alpha_U]).reshape((-1,3)))[0][0]
-        Q3 = torque_model.predict_values(np.array([Va, cmd_m3, alpha_U]).reshape((-1,3)))[0][0]
-        T4 = thrust_model.predict_values(np.array([Va, cmd_m4, alpha_L]).reshape((-1,3)))[0][0]
-        Q4 = torque_model.predict_values(np.array([Va, cmd_m4, alpha_L]).reshape((-1,3)))[0][0]
+        alpha_M = alpha + drone.prop_angle
+        T1 = thrust_model.predict_values(np.array([Va, cmd_m1, alpha_M]).reshape((-1,3)))[0][0]
+        Q1 = torque_model.predict_values(np.array([Va, cmd_m1, alpha_M]).reshape((-1,3)))[0][0]
+        T2 = thrust_model.predict_values(np.array([Va, cmd_m2, alpha_M]).reshape((-1,3)))[0][0]
+        Q2 = torque_model.predict_values(np.array([Va, cmd_m2, alpha_M]).reshape((-1,3)))[0][0]
+        T3 = thrust_model.predict_values(np.array([Va, cmd_m3, alpha_M]).reshape((-1,3)))[0][0]
+        Q3 = torque_model.predict_values(np.array([Va, cmd_m3, alpha_M]).reshape((-1,3)))[0][0]
+        T4 = thrust_model.predict_values(np.array([Va, cmd_m4, alpha_M]).reshape((-1,3)))[0][0]
+        Q4 = torque_model.predict_values(np.array([Va, cmd_m4, alpha_M]).reshape((-1,3)))[0][0]
 
         # reverting the small hack
         sys.stdout = sys.__stdout__
@@ -1193,18 +923,36 @@ class BaseAviary(gym.Env):
                      + drone.Cm_del_e * cmd_elevator)
 
         Mx = .5 * drone.rho * drone.Sref * Va ** 2 * drone.Bref * (
-                    drone.Cl_beta * beta + drone.Cl_p * p * drone.Bref / (2 * Va) +
-                    drone.Cl_r * r * drone.Bref / (2 * Va) +
-                    drone.Cl_del_a * cmd_aileron + drone.Cl_del_r * cmd_rudder)
+                drone.Cl_beta * beta + drone.Cl_p * p * drone.Bref / (2 * Va) +
+                drone.Cl_r * r * drone.Bref / (2 * Va) +
+                drone.Cl_del_a * cmd_aileron + drone.Cl_del_r * cmd_rudder)
+
 
         Mz = 0.5 * drone.rho * drone.Sref * Va ** 2 * drone.Bref * (
-                    drone.Cn_beta * beta + drone.Cn_p * p * drone.Bref / (2 * Va) +
-                    drone.Cn_r * r * drone.Bref / (2 * Va) +
-                    drone.Cn_del_a * cmd_aileron + drone.Cn_del_r * cmd_rudder)
+                                 drone.Cn_beta * beta + drone.Cn_p * p * drone.Bref / (2 * Va) +
+                                 drone.Cn_r * r * drone.Bref / (2 * Va) +
+                                 drone.Cn_del_a * cmd_aileron + drone.Cn_del_r * cmd_rudder)
 
-        #AERO FORCES
+        Mx = My = Mz = 0
+        F_lift = -0.728 * 9.8/(np.cos(cur_rpy[1])*np.cos(cur_rpy[0]))
+        Fy = 0
+        F_drag = -7
+        sys.stdout = open(os.devnull, 'w')
+        alpha_M = alpha + drone.prop_angle
+        T1 = thrust_model.predict_values(np.array([10, cmd_m1, 0]).reshape((-1, 3)))[0][0]
+        Q1 = torque_model.predict_values(np.array([10, cmd_m1, 0]).reshape((-1, 3)))[0][0]
+        T2 = thrust_model.predict_values(np.array([10, cmd_m2, 0]).reshape((-1, 3)))[0][0]
+        Q2 = torque_model.predict_values(np.array([10, cmd_m2, 0]).reshape((-1, 3)))[0][0]
+        T3 = thrust_model.predict_values(np.array([10, cmd_m3, 0]).reshape((-1, 3)))[0][0]
+        Q3 = torque_model.predict_values(np.array([10, cmd_m3, 0]).reshape((-1, 3)))[0][0]
+        T4 = thrust_model.predict_values(np.array([10, cmd_m4, 0]).reshape((-1, 3)))[0][0]
+        Q4 = torque_model.predict_values(np.array([10, cmd_m4, 0]).reshape((-1, 3)))[0][0]
+
+        # reverting the small hack
+        sys.stdout = sys.__stdout__
+        ## AERO FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                               0,
+                               1,
                                forceObj=[F_drag, -Fy, -F_lift],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
@@ -1212,549 +960,328 @@ class BaseAviary(gym.Env):
                                )
         ### AERO MOMENTS
         pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                                0,
-                                torqueObj=[Mx,-My,-Mz],
+                                1,
+                                torqueObj=[Mx, -My, -Mz],
                                 flags=pyb.LINK_FRAME,
                                 physicsClientId=self.CLIENT
                                 )
         ### Prop1 FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                               1,
-                               forceObj=[T1, 0,0],
+                               2,
+                               forceObj=[T1, 0, 0],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
                                )
         ### Prop1 MOMENTS
         pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                                1,
-                                torqueObj=[-Q1,0,0],
+                                2,
+                                torqueObj=[-Q1, 0, 0],
                                 flags=pyb.LINK_FRAME,
                                 physicsClientId=self.CLIENT
                                 )
         ### Prop2 FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                               2,
-                               forceObj=[T2, 0.,0],
+                               3,
+                               forceObj=[T2, 0., 0],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
                                )
         ### Prop2 MOMENTS
         pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                                2,
+                                3,
                                 torqueObj=[Q2, 0, 0],
                                 flags=pyb.LINK_FRAME,
                                 physicsClientId=self.CLIENT
                                 )
         ### Prop3 FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                               3,
-                               forceObj=[T3, 0.,0],
+                               4,
+                               forceObj=[T3, 0., 0],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
                                )
         ### Prop3 MOMENTS
         pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                                3,
+                                4,
                                 torqueObj=[Q3, 0, 0],
                                 flags=pyb.LINK_FRAME,
                                 physicsClientId=self.CLIENT
                                 )
         ### Prop4 FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                               4,
-                               forceObj=[T4, 0.,0],
+                               5,
+                               forceObj=[T4, 0., 0],
                                posObj=[0, 0, 0],
                                flags=pyb.LINK_FRAME,
                                physicsClientId=self.CLIENT
                                )
         ### Prop4 MOMENTS
         pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                                4,
+                                5,
                                 torqueObj=[-Q4, 0, 0],
                                 flags=pyb.LINK_FRAME,
                                 physicsClientId=self.CLIENT
                                 )
 
-    def _coaxial_birotor_physics(self,
-                 cmd,
-                 nth_drone
-                 ):
-        rpm = self.drones[nth_drone].PWM2RPM_SCALE * cmd + self.drones[nth_drone].PWM2RPM_CONST
-        forces = np.array(rpm**2)*self.drones[nth_drone].KF
-        torques = np.array(rpm**2)*self.drones[nth_drone].KM
-
-        i=0
-        for _cmd in cmd[2:]:
-            deflection = _cmd*np.deg2rad(10.) # cmd is in -1/+1 for radians
-            pyb.resetJointState(nth_drone+1, i, deflection)
-            # print(f' {i}- deflection : {deflection}')
-            i +=1
-
-        s=[-1, 1]
-        for i in range(2):
-            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                                 i+1,
-                                 forceObj=[0., 0., forces[i]],
-                                 posObj=[0, 0, 0],
-                                 flags=pyb.LINK_FRAME,
-                                 physicsClientId=self.CLIENT
-                                 )
-
-            pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                                  i+1, # to base link : fuselage
-                                  torqueObj=[0., 0., s[i]*torques[i]],
-                                  flags=pyb.LINK_FRAME, #FIX ME FIXME
-                                  physicsClientId=self.CLIENT
-                                  )
-
-    ################################################################################
-
-    def _morphing_hexa_physics(self,
-                 cmd,
-                 nth_drone
-                 ):
-        """Morphing hexa rotor physics implementation.
-        Parameters
-        ----------
-        cmd : ndarray
-            (6)-shaped array of ints containing the command values of the 6 motors.
-        nth_drone : int
-            The ordinal number/position of the desired drone in list self.DRONE_IDS.
-        """
-        rpm = self.drones[nth_drone].PWM2RPM_SCALE * cmd + self.drones[nth_drone].PWM2RPM_CONST
-        forces = np.array(rpm**2)*self.drones[nth_drone].KF
-        torques = np.array(rpm**2)*self.drones[nth_drone].KM
-
-        f_noise = np.random.normal(0, 0.01, self.drones[nth_drone].INDI_ACTUATOR_NR)
-        m_noise = np.random.normal(0, 0.001,self.drones[nth_drone].INDI_ACTUATOR_NR)
-        forces += f_noise
-        torques += m_noise
-
-        # forces[1] = 0.*forces[1]
-        # torques[1] = 0.*torques[1]
-
-        # z_torque = (-torques[0] + torques[1] - torques[2] + torques[3] - torques[4] + torques[5])
-        for i in [0,2,4]:
-            torques[i] *= -1.
-
-        for i, j in zip(range(1,12,2),range(6)):
-            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                                 i,
-                                 forceObj= [0., 0., forces[j]],# [f_noise[0], f_noise[1], forces[j]],
-                                 posObj=[0, 0, 0],
-                                 flags=pyb.LINK_FRAME,
-                                 physicsClientId=self.CLIENT
-                                 )
-            pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                                  i, # to base link : fuselage
-                                  torqueObj=[0., 0., torques[j]],
-                                  flags=pyb.LINK_FRAME, #FIX ME FIXME
-                                  physicsClientId=self.CLIENT
-                                  )
-
-    ################################################################################
-
-    def _quad_copter_physics(self,
-                 cmd, # was rpm
-                 nth_drone
-                 ):
-        """Base PyBullet quad rotor physics implementation.
-        Parameters
-        ----------
-        cmd : ndarray
-            (4)-shaped array of ints containing the command values of the 4 motors.
-        nth_drone : int
-            The ordinal number/position of the desired drone in list self.DRONE_IDS.
-        """
-        
-        rpm = self.drones[nth_drone].PWM2RPM_SCALE * cmd + self.drones[nth_drone].PWM2RPM_CONST
-        # rpm = 20000.*cmd
-
-        if 'advanced' in self.drones[nth_drone].TYPE :
-             F_prop, M_prop = self._get_prop_FMs(rpm,nth_drone)
-             direction = np.array([-1., 1., -1., 1.])
-             # print('########### F-M prop : ',F_prop, M_prop)
-             for i in range(self.drones[nth_drone].INDI_ACTUATOR_NR):
-                 pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                            i, # Applied to the baselink of the vehicle 
-                            forceObj=[F_prop[i][0], F_prop[i][1], F_prop[i][2]],
-                            posObj=[0, 0, 0],
-                            flags=pyb.LINK_FRAME,
-                            physicsClientId=self.CLIENT
-                            )
-                 pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                            i,
-                            torqueObj=[0, 0, M_prop[i][2]*direction[i]],
-                            flags=pyb.LINK_FRAME,
-                            physicsClientId=self.CLIENT
-                            )
-             
+    def _winged_physics(self,
+                                 cmd,
+                                 nth_drone,
+                                 current_wind
+                                 ):
+        '''
+        VTOL flight dynamics based on  the models by Randy Beard and Tim McLain
+        https://github.com/randybeard/uavbook
+        We begin by taking states, and then calculate the forces and moments
+        '''
+        # calculate atm data
+        quaternion = self.quat[nth_drone, :]
+        cur_rpy = np.array(pyb.getEulerFromQuaternion(quaternion))
+        u, v, w = self.vel[nth_drone, :]
+        R_vb = np.array(pyb.getMatrixFromQuaternion(quaternion)).reshape(3, 3)
+        # We now correct R_vb from Pybullet frame to wind frame
+        R_vb = R_vb @ np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
+        steady_state = current_wind[0:3]
+        gust = current_wind[3:6]
+        # convert wind vector from world to body frame and add gust
+        wind_body_frame = R_vb @ steady_state + gust
+        v_air_i = np.array([u, v, w])
+        v_air_b = R_vb.T.dot(v_air_i)
+        ur = v_air_b[0] - wind_body_frame[0]
+        vr = v_air_b[1] - wind_body_frame[1]
+        wr = v_air_b[2] - wind_body_frame[2]
+        # compute airspeed
+        Va = np.sqrt(ur ** 2 + vr ** 2 + wr ** 2)[0]
+        # compute angle of attack
+        if ur == 0:
+            alpha = np.sign(wr) * np.pi / 2
         else:
-            forces = np.array(rpm**2)*self.drones[nth_drone].KF
-            torques = np.array(rpm**2)*self.drones[nth_drone].KM
+            alpha = np.arctan(wr / ur)
 
-            f_noise = np.random.normal(0, 0.01, self.drones[nth_drone].INDI_ACTUATOR_NR)
-            m_noise = np.random.normal(0, 0.001,self.drones[nth_drone].INDI_ACTUATOR_NR)
-            # f_noise = np.zeros(4)
-            # m_noise = np.zeros(4)
-            forces += f_noise
-            torques += m_noise
-
-            z_torque = (-torques[0] + torques[1] - torques[2] + torques[3])
-            for i in range(self.drones[nth_drone].INDI_ACTUATOR_NR):
-                pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                                     i,
-                                     forceObj=[f_noise[0], f_noise[1], forces[i]],
-                                     posObj=[0, 0, 0],
-                                     flags=pyb.LINK_FRAME,
-                                     physicsClientId=self.CLIENT
-                                     )
-            pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
-                                  -1,  # FIX ME : this is not correct , use center of mass !!! 
-                                  torqueObj=[m_noise[0], m_noise[1], z_torque],
-                                  flags=pyb.LINK_FRAME,
-                                  physicsClientId=self.CLIENT
-                                  )
-        wind=0
-        wind_vector = np.array([0.,-10.5,0.]) # FIX ME : make this parametric 
-        drag_coeff = -0.0438 # This is only for Tello (modeled infront of ENAC's Windshape)
-        
-        if wind:
-            base_rot = np.array(pyb.getMatrixFromQuaternion(self.quat[nth_drone, :])).reshape(3, 3)
-            #### Simple draft model applied to the base/center of mass #
-            # drag_factors = -1 * self.DRAG_COEFF * np.sum(np.array(2*np.pi*rpm/60))
-            drag = np.dot(base_rot, drag_coeff*(np.array(self.vel[nth_drone, :]-wind_vector) ))
-            pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                                 4,
-                                 forceObj=drag,
-                                 posObj=[0, 0, 0],
-                                 flags=pyb.LINK_FRAME,
-                                 physicsClientId=self.CLIENT
-                                 )
-
-
-    ################################################################################
-
-    def _get_prop_FMs(self,rpm,nth_drone):
-        '''
-        Calculates inclined propeller forces and moments 
-        '''
-
-        # Get orientation of the quad, and generate rotation matrix
-        # self.pos[i], self.quat[i] = p.getBasePositionAndOrientation(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
-        # self.rpy[i] = p.getEulerFromQuaternion(self.quat[i])
-        R = np.array(pyb.getMatrixFromQuaternion(self.quat[nth_drone])).reshape(3, 3)
-
-        # Get quad's inertial speed vector
-        # self.vel[i], self.ang_v[i] = p.getBaseVelocity(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
-        # print('Speed vector [inertial] : ', self.vel[nth_drone] )
-
-        # Project inertial speed to quad frame and prepare normalised vector
-        V_i = self.vel[nth_drone] if np.linalg.norm(self.vel[nth_drone])>0.1 else np.array([0.1, 0., 0.]) # Not the best :(
-        V_b = R.dot(V_i)
-        V_b_normed = V_b/np.linalg.norm(V_b)
-        # V_b_normed_x = np.array([V_b_normed[0], 0., 0.])
-        # print('Speed vector [  body  ] : ', V_b )
-
-        # Obtain largest angle and orientation
-        T_b = np.array([0., 0., 1.]) # Thrust vector in body frame
-        # T_b_x= np.array([1., 0., 0.]) # Body x direction
-
-        # So, if v1 and v2 are normalised so that |v1|=|v2|=1, then,
-        beta = np.arccos(V_b_normed.dot(T_b)) # T_b is already normalized, thats wy we can do this !
-        psi = np.arctan(V_b[1]/V_b[0]) if V_b[0] > 0.1 else 0. # If the psi is close to 90deg, this is not correct... also for low speed...
-        # print(f'Largest angle : {beta} Heading difference : {np.rad2deg(psi)}')
-        # angle = acos(v1.dot(v2))
-        # axis = norm(np.cross(v1,v2))
-
-        # Obtain the Force and Moment vectors from propeller database fitted method...
-        # Fake force and moment vectors for the moment
-        FM = np.zeros((len(rpm),6))
-        # M = np.zeros(3)
-        # V = 12
-        # beta = 0.45
-        # Omega = 1050
-        # V = np.linalg.norm(self.vel[nth_drone]) if np.linalg.norm(self.vel[nth_drone])>0.1 else 0.1
-        propeller = "mamr-8x4.5"
-        for i, _rpm in enumerate(rpm):
-            # print(f'BETA : {beta}')
-            # FM[i] = calculate_propeller_forces_moments(propeller, np.linalg.norm(self.vel[nth_drone]), beta, _rpm/60.*2*np.pi, Data_section3_ObliqueFlow, method = 1)
-            FM[i] = calculate_propeller_forces_moments(propeller, np.linalg.norm(self.vel[nth_drone]), beta, _rpm/60.*2*np.pi, Data_section5_ObliqueFlow, method = 2)
-            # print(f' Vel : {np.linalg.norm(self.vel[nth_drone])}  --  RPM : {rpm} --- FM : {FM}')
-            # method2 = calculate_propeller_forces_moments(propeller, self.vel[nth_drone], beta, rpm, Data_section5_ObliqueFlow,method = 2)
+        p, q, r = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]]) @ self.ang_v[nth_drone, :]
+        cmd_prop = cmd[3] * 1570 + 730
+        cmd_elevator = cmd[1]
+        cmd_aileron = cmd[0]
+        cmd_rudder = cmd[2]
+        # small hack to avoid smt to print everything all the time
+        sys.stdout = open(os.devnull, 'w')
+        T1 = thrust_model.predict_values(np.array([Va, cmd_prop, 0]).reshape((-1, 3)))[0][0]
+        Q1 = torque_model.predict_values(np.array([Va, cmd_prop, 0]).reshape((-1, 3)))[0][0]
+        # reverting the small hack
+        sys.stdout = sys.__stdout__
+        # calculate forces and moments - aero
+        n_sigma = np.exp(-drone.M * (alpha - drone.alpha0))
+        p_sigma = np.exp(drone.M * (alpha + drone.alpha0))
+        sigma = (1 + p_sigma + n_sigma) / ((1 + n_sigma) * (1 + p_sigma))
+        CL_a = (1 - sigma) * (drone.CL0 + drone.CL_alpha * alpha) + \
+               sigma * (2 * np.sign(alpha) * np.sin(alpha) ** 2 * np.cos(alpha))
+        CD_a = drone.CD0 + (drone.CL0 + drone.CL_alpha * alpha) ** 2 / (np.pi * drone.oswald * drone.AR)
+        CL = (-CD_a * np.sin(alpha) - CL_a * np.cos(alpha)) + \
+             ((-drone.CD_q * np.sin(alpha) - drone.CL_q * np.cos(alpha)) * drone.Cref * q / (2 * Va)) + \
+             ((-drone.CD_del_e * np.sin(alpha) - drone.CL_del_e * np.cos(alpha)) * cmd_elevator)
+        CD = (-CD_a * np.cos(alpha) + CL_a * np.sin(alpha)) + \
+             ((-drone.CD_q * np.cos(alpha) + drone.CL_q * np.sin(alpha)) * drone.Cref * q / (2 * Va)) + \
+             ((-drone.CD_del_e * np.cos(alpha) + drone.CL_del_e * np.sin(alpha)) * cmd_elevator)
+        # compute Lift and Drag Forces
+        F_lift = .5 * drone.rho * drone.Sref * Va ** 2 * CL
+        F_drag = .5 * drone.rho * drone.Sref * Va ** 2 * CD
+        Fy = .5 * drone.rho * drone.Sref * Va ** 2 * (
+                drone.CY_beta * beta + drone.CY_p * p * drone.Bref / (2 * Va) +
+                drone.CY_r * r * drone.Bref / (2 * Va) +
+                drone.CY_del_a * cmd_aileron + drone.CY_del_r * cmd_rudder)
+        My = .5 * drone.rho * drone.Sref * Va ** 2 * drone.Cref * \
+             (drone.Cm0 + drone.Cm_alpha * alpha + (drone.Cm_q * q * drone.Cref / (2 * Va))
+              + drone.Cm_del_e * cmd_elevator)
+        Mx = .5 * drone.rho * drone.Sref * Va ** 2 * drone.Bref * (
+                drone.Cl_beta * beta + drone.Cl_p * p * drone.Bref / (2 * Va) +
+                drone.Cl_r * r * drone.Bref / (2 * Va) +
+                drone.Cl_del_a * cmd_aileron + drone.Cl_del_r * cmd_rudder)
+        Mz = 0.5 * drone.rho * drone.Sref * Va ** 2 * drone.Bref * (
+                drone.Cn_beta * beta + drone.Cn_p * p * drone.Bref / (2 * Va) +
+                drone.Cn_r * r * drone.Bref / (2 * Va) +
+                drone.Cn_del_a * cmd_aileron + drone.Cn_del_r * cmd_rudder)
 
 
-        # Rotate the F,M to Body axis F_b, M_b:
-        R_z = np.array([[np.cos(psi),-np.sin(psi), 0.],
-                        [np.sin(psi), np.cos(psi), 0.],
-                        [0., 0., 1.]])
-        F_b = [R_z.dot(FM[i,:3]) for i in range(len(rpm))]
-        M_b = [R_z.dot(FM[i,3:]) for i in range(len(rpm))] 
-
-        return F_b, M_b
-
-    ################################################################################
-
-    def _groundEffect(self,
+        ## AERO FORCES
+        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
+                               1,
+                               forceObj=[F_drag, -Fy, -F_lift],
+                               posObj=[0, 0, 0],
+                               flags=pyb.LINK_FRAME,
+                               physicsClientId=self.CLIENT
+                               )
+        ### AERO MOMENTS
+        pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
+                                1,
+                                torqueObj=[Mx, -My, -Mz],
+                                flags=pyb.LINK_FRAME,
+                                physicsClientId=self.CLIENT
+                                )
+        ### Prop1 FORCE
+        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
+                               2,
+                               forceObj=[T1, 0, 0],
+                               posObj=[0, 0, 0],
+                               flags=pyb.LINK_FRAME,
+                               physicsClientId=self.CLIENT
+                               )
+        ### Prop1 MOMENT
+        pyb.applyExternalTorque(self.DRONE_IDS[nth_drone],
+                                2,
+                                torqueObj=[-Q1/5, 0, 0],
+                                flags=pyb.LINK_FRAME,
+                                physicsClientId=self.CLIENT
+                                )
+        ################################################################################
+        def _dynamics(self,
                       rpm,
                       nth_drone
                       ):
-        """PyBullet implementation of a ground effect model.
+            """Explicit dynamics implementation.
+            Based on code written at the Dynamic Systems Lab by James Xu.
+            Parameters
+            ----------
+            rpm : ndarray
+                (4)-shaped array of ints containing the RPMs values of the 4 motors.
+            nth_drone : int
+                The ordinal number/position of the desired drone in list self.DRONE_IDS.
+            """
+            #### Current state #########################################
+            pos = self.pos[nth_drone, :]
+            quat = self.quat[nth_drone, :]
+            rpy = self.rpy[nth_drone, :]
+            vel = self.vel[nth_drone, :]
+            rpy_rates = self.rpy_rates[nth_drone, :]
+            rotation = np.array(p.getMatrixFromQuaternion(quat)).reshape(3, 3)
+            #### Compute forces and torques ############################
+            forces = np.array(rpm ** 2) * self.KF
+            thrust = np.array([0, 0, np.sum(forces)])
+            thrust_world_frame = np.dot(rotation, thrust)
+            force_world_frame = thrust_world_frame - np.array([0, 0, self.GRAVITY])
+            z_torques = np.array(rpm ** 2) * self.KM
+            z_torque = (-z_torques[0] + z_torques[1] - z_torques[2] + z_torques[3])
+            if self.DRONE_MODEL == DroneModel.CF2X:
+                x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * (self.L / np.sqrt(2))
+                y_torque = (- forces[0] + forces[1] + forces[2] - forces[3]) * (self.L / np.sqrt(2))
+            elif self.DRONE_MODEL == DroneModel.CF2P or self.DRONE_MODEL == DroneModel.HB:
+                x_torque = (forces[1] - forces[3]) * self.L
+                y_torque = (-forces[0] + forces[2]) * self.L
+            torques = np.array([x_torque, y_torque, z_torque])
+            torques = torques - np.cross(rpy_rates, np.dot(self.J, rpy_rates))
+            rpy_rates_deriv = np.dot(self.J_INV, torques)
+            no_pybullet_dyn_accs = force_world_frame / self.M
+            #### Update state ##########################################
+            vel = vel + self.TIMESTEP * no_pybullet_dyn_accs
+            rpy_rates = rpy_rates + self.TIMESTEP * rpy_rates_deriv
+            pos = pos + self.TIMESTEP * vel
+            rpy = rpy + self.TIMESTEP * rpy_rates
+            #### Set PyBullet's state ##################################
+            pyb.resetBasePositionAndOrientation(self.DRONE_IDS[nth_drone],
+                                                pos,
+                                                pyb.getQuaternionFromEuler(rpy),
+                                                physicsClientId=self.CLIENT
+                                                )
+            #### Note: the base's velocity only stored and not used ####
+            pyb.resetBaseVelocity(self.DRONE_IDS[nth_drone],
+                                  vel,
+                                  [-1, -1, -1],  # ang_vel not computed by DYN
+                                  physicsClientId=self.CLIENT
+                                  )
+            #### Store the roll, pitch, yaw rates for the next step ####
+            self.rpy_rates[nth_drone, :] = rpy_rates
 
-        Inspired by the analytical model used for comparison in (Shi et al., 2019).
+        ################################################################################
 
-        Parameters
-        ----------
-        rpm : ndarray
-            (4)-shaped array of ints containing the RPMs values of the 4 motors.
-        nth_drone : int
-            The ordinal number/position of the desired drone in list self.DRONE_IDS.
+        def _normalizedActionToRPM(self,
+                                   action
+                                   ):
+            """De-normalizes the [-1, 1] range to the [0, MAX_RPM] range.
+            Parameters
+            ----------
+            action : ndarray
+                (4)-shaped array of ints containing an input in the [-1, 1] range.
+            Returns
+            -------
+            ndarray
+                (4)-shaped array of ints containing RPMs for the 4 motors in the [0, MAX_RPM] range.
+            """
+            if np.any(np.abs(action)) > 1:
+                print("\n[ERROR] it", self.step_counter, "in BaseAviary._normalizedActionToRPM(), out-of-bound action")
+            return np.where(action <= 0, (action + 1) * self.HOVER_RPM,
+                            action * self.MAX_RPM)  # Non-linear mapping: -1 -> 0, 0 -> HOVER_RPM, 1 -> MAX_RPM
 
-        """
-        #### Kin. info of all links (propellers and center of mass)
-        link_states = np.array(pyb.getLinkStates(self.DRONE_IDS[nth_drone],
-                                               linkIndices=[0, 1, 2, 3, 4],
-                                               computeLinkVelocity=1,
-                                               computeForwardKinematics=1,
-                                               physicsClientId=self.CLIENT
-                                               ))
-        #### Simple, per-propeller ground effects ##################
-        prop_heights = np.array([link_states[0, 0][2], link_states[1, 0][2], link_states[2, 0][2], link_states[3, 0][2]])
-        prop_heights = np.clip(prop_heights, self.GND_EFF_H_CLIP, np.inf)
-        gnd_effects = np.array(rpm**2) * self.KF * self.GND_EFF_COEFF * (self.PROP_RADIUS/(4 * prop_heights))**2
-        if np.abs(self.rpy[nth_drone,0]) < np.pi/2 and np.abs(self.rpy[nth_drone,1]) < np.pi/2:
-            for i in range(4):
-                pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                                     i,
-                                     forceObj=[0, 0, gnd_effects[i]],
-                                     posObj=[0, 0, 0],
-                                     flags=pyb.LINK_FRAME,
-                                     physicsClientId=self.CLIENT
-                                     )
-        #### TODO: a more realistic model accounting for the drone's
-        #### Attitude and its z-axis velocity in the world frame ###
-    
-    ################################################################################
+        ################################################################################
 
-    def _drag(self,
-              rpm,
-              nth_drone
-              ):
-        """PyBullet implementation of a drag model.
-
-        Based on the the system identification in (Forster, 2015).
-
-        Parameters
-        ----------
-        rpm : ndarray
-            (4)-shaped array of ints containing the RPMs values of the 4 motors.
-        nth_drone : int
-            The ordinal number/position of the desired drone in list self.DRONE_IDS.
-
-        """
-        #### Rotation matrix of the base ###########################
-        base_rot = np.array(pyb.getMatrixFromQuaternion(self.quat[nth_drone, :])).reshape(3, 3)
-        #### Simple draft model applied to the base/center of mass #
-        drag_factors = -1 * self.DRAG_COEFF * np.sum(np.array(2*np.pi*rpm/60))
-        drag = np.dot(base_rot, drag_factors*np.array(self.vel[nth_drone, :]))
-        pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                             4,
-                             forceObj=drag,
-                             posObj=[0, 0, 0],
-                             flags=pyb.LINK_FRAME,
-                             physicsClientId=self.CLIENT
-                             )
-    
-    ################################################################################
-
-    def _downwash(self,
-                  nth_drone
-                  ):
-        """PyBullet implementation of a ground effect model.
-
-        Based on experiments conducted at the Dynamic Systems Lab by SiQi Zhou.
-
-        Parameters
-        ----------
-        nth_drone : int
-            The ordinal number/position of the desired drone in list self.DRONE_IDS.
-
-        """
-        for i in range(self.NUM_DRONES):
-            delta_z = self.pos[i, 2] - self.pos[nth_drone, 2]
-            delta_xy = np.linalg.norm(np.array(self.pos[i, 0:2]) - np.array(self.pos[nth_drone, 0:2]))
-            if delta_z > 0 and delta_xy < 10: # Ignore drones more than 10 meters away
-                alpha = self.DW_COEFF_1 * (self.PROP_RADIUS/(4*delta_z))**2
-                beta = self.DW_COEFF_2 * delta_z + self.DW_COEFF_3
-                downwash = [0, 0, -alpha * np.exp(-.5*(delta_xy/beta)**2)]
-                pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
-                                     4,
-                                     forceObj=downwash,
-                                     posObj=[0, 0, 0],
-                                     flags=pyb.LINK_FRAME,
-                                     physicsClientId=self.CLIENT
-                                     )
-
-    ################################################################################
-
-    def _dynamics(self,
-                  rpm,
-                  nth_drone
-                  ):
-        """Explicit dynamics implementation.
-
-        Based on code written at the Dynamic Systems Lab by James Xu.
-
-        Parameters
-        ----------
-        rpm : ndarray
-            (4)-shaped array of ints containing the RPMs values of the 4 motors.
-        nth_drone : int
-            The ordinal number/position of the desired drone in list self.DRONE_IDS.
-
-        """
-        #### Current state #########################################
-        pos = self.pos[nth_drone,:]
-        quat = self.quat[nth_drone,:]
-        rpy = self.rpy[nth_drone,:]
-        vel = self.vel[nth_drone,:]
-        rpy_rates = self.rpy_rates[nth_drone,:]
-        rotation = np.array(p.getMatrixFromQuaternion(quat)).reshape(3, 3)
-        #### Compute forces and torques ############################
-        forces = np.array(rpm**2) * self.KF
-        thrust = np.array([0, 0, np.sum(forces)])
-        thrust_world_frame = np.dot(rotation, thrust)
-        force_world_frame = thrust_world_frame - np.array([0, 0, self.GRAVITY])
-        z_torques = np.array(rpm**2)*self.KM
-        z_torque = (-z_torques[0] + z_torques[1] - z_torques[2] + z_torques[3])
-        if self.DRONE_MODEL==DroneModel.CF2X:
-            x_torque = (forces[0] + forces[1] - forces[2] - forces[3]) * (self.L/np.sqrt(2))
-            y_torque = (- forces[0] + forces[1] + forces[2] - forces[3]) * (self.L/np.sqrt(2))
-        elif self.DRONE_MODEL==DroneModel.CF2P or self.DRONE_MODEL==DroneModel.HB:
-            x_torque = (forces[1] - forces[3]) * self.L
-            y_torque = (-forces[0] + forces[2]) * self.L
-        torques = np.array([x_torque, y_torque, z_torque])
-        torques = torques - np.cross(rpy_rates, np.dot(self.J, rpy_rates))
-        rpy_rates_deriv = np.dot(self.J_INV, torques)
-        no_pybullet_dyn_accs = force_world_frame / self.M
-        #### Update state ##########################################
-        vel = vel + self.TIMESTEP * no_pybullet_dyn_accs
-        rpy_rates = rpy_rates + self.TIMESTEP * rpy_rates_deriv
-        pos = pos + self.TIMESTEP * vel
-        rpy = rpy + self.TIMESTEP * rpy_rates
-        #### Set PyBullet's state ##################################
-        pyb.resetBasePositionAndOrientation(self.DRONE_IDS[nth_drone],
-                                          pos,
-                                          pyb.getQuaternionFromEuler(rpy),
-                                          physicsClientId=self.CLIENT
-                                          )
-        #### Note: the base's velocity only stored and not used ####
-        pyb.resetBaseVelocity(self.DRONE_IDS[nth_drone],
-                            vel,
-                            [-1, -1, -1], # ang_vel not computed by DYN
-                            physicsClientId=self.CLIENT
-                            )
-        #### Store the roll, pitch, yaw rates for the next step ####
-        self.rpy_rates[nth_drone,:] = rpy_rates
-    
-    ################################################################################
-
-    def _normalizedActionToRPM(self,
-                               action
-                               ):
-        """De-normalizes the [-1, 1] range to the [0, MAX_RPM] range.
-
-        Parameters
-        ----------
-        action : ndarray
-            (4)-shaped array of ints containing an input in the [-1, 1] range.
-
-        Returns
-        -------
-        ndarray
-            (4)-shaped array of ints containing RPMs for the 4 motors in the [0, MAX_RPM] range.
-
-        """
-        if np.any(np.abs(action)) > 1:
-            print("\n[ERROR] it", self.step_counter, "in BaseAviary._normalizedActionToRPM(), out-of-bound action")
-        return np.where(action <= 0, (action+1)*self.HOVER_RPM, action*self.MAX_RPM) # Non-linear mapping: -1 -> 0, 0 -> HOVER_RPM, 1 -> MAX_RPM
-    
-    ################################################################################
-
-    def _saveLastAction(self,
-                        action
-                        ):
-        """Stores the most recent action into attribute `self.last_action`.
-
-        The last action can be used to compute aerodynamic effects.
-        The method disambiguates between array and dict inputs 
-        (for single or multi-agent aviaries, respectively).
-
-        Parameters
-        ----------
-        action : ndarray | dict
-            (4)-shaped array of ints (or dictionary of arrays) containing the current RPMs input.
-
-        """
-        if isinstance(action, collections.Mapping):
-            for k, v in action.items(): 
-                res_v = np.resize(v, (1, 4)) # Resize, possibly with repetition, to cope with different action spaces in RL subclasses
-                self.last_action[int(k), :] = res_v
-        else: 
-            res_action = np.resize(action, (1, 4)) # Resize, possibly with repetition, to cope with different action spaces in RL subclasses
-            self.last_action = np.reshape(res_action, (self.NUM_DRONES, 4))
-    
-    ################################################################################
-
-    def _showDroneLocalAxes(self,
-                            nth_drone
+        def _saveLastAction(self,
+                            action
                             ):
-        """Draws the local frame of the n-th drone in PyBullet's GUI.
+            """Stores the most recent action into attribute `self.last_action`.
+            The last action can be used to compute aerodynamic effects.
+            The method disambiguates between array and dict inputs
+            (for single or multi-agent aviaries, respectively).
+            Parameters
+            ----------
+            action : ndarray | dict
+                (4)-shaped array of ints (or dictionary of arrays) containing the current RPMs input.
+            """
+            if isinstance(action, collections.Mapping):
+                for k, v in action.items():
+                    res_v = np.resize(v, (
+                    1, 4))  # Resize, possibly with repetition, to cope with different action spaces in RL subclasses
+                    self.last_action[int(k), :] = res_v
+            else:
+                res_action = np.resize(action, (
+                1, 4))  # Resize, possibly with repetition, to cope with different action spaces in RL subclasses
+                self.last_action = np.reshape(res_action, (self.NUM_DRONES, 4))
 
-        Parameters
-        ----------
-        nth_drone : int
-            The ordinal number/position of the desired drone in list self.DRONE_IDS.
+        ################################################################################
 
-        """
-        if self.GUI:
-            AXIS_LENGTH = 2*self.L
-            self.X_AX[nth_drone] = pyb.addUserDebugLine(lineFromXYZ=[0, 0, 0],
-                                                      lineToXYZ=[AXIS_LENGTH, 0, 0],
-                                                      lineColorRGB=[1, 0, 0],
-                                                      parentObjectUniqueId=self.DRONE_IDS[nth_drone],
-                                                      parentLinkIndex=-1,
-                                                      replaceItemUniqueId=int(self.X_AX[nth_drone]),
-                                                      physicsClientId=self.CLIENT
-                                                      )
+        def _showDroneLocalAxes(self,
+                                nth_drone
+                                ):
+            """Draws the local frame of the n-th drone in PyBullet's GUI.
+            Parameters
+            ----------
+            nth_drone : int
+                The ordinal number/position of the desired drone in list self.DRONE_IDS.
+            """
+            if self.GUI:
+                AXIS_LENGTH = 2 * self.L
+                self.X_AX[nth_drone] = pyb.addUserDebugLine(lineFromXYZ=[0, 0, 0],
+                                                            lineToXYZ=[AXIS_LENGTH, 0, 0],
+                                                            lineColorRGB=[1, 0, 0],
+                                                            parentObjectUniqueId=self.DRONE_IDS[nth_drone],
+                                                            parentLinkIndex=-1,
+                                                            replaceItemUniqueId=int(self.X_AX[nth_drone]),
+                                                            physicsClientId=self.CLIENT
+                                                            )
 
-
-            self.Y_AX[nth_drone] = pyb.addUserDebugLine(lineFromXYZ=[0, 0, 0],
-                                                      lineToXYZ=[0, AXIS_LENGTH, 0],
-                                                      lineColorRGB=[0, 1, 0],
-                                                      parentObjectUniqueId=self.DRONE_IDS[nth_drone],
-                                                      parentLinkIndex=-1,
-                                                      replaceItemUniqueId=int(self.Y_AX[nth_drone]),
-                                                      physicsClientId=self.CLIENT
-                                                      )
-            self.Z_AX[nth_drone] = pyb.addUserDebugLine(lineFromXYZ=[0, 0, 0],
-                                                      lineToXYZ=[0, 0, AXIS_LENGTH],
-                                                      lineColorRGB=[0, 0, 1],
-                                                      parentObjectUniqueId=self.DRONE_IDS[nth_drone],
-                                                      parentLinkIndex=-1,
-                                                      replaceItemUniqueId=int(self.Z_AX[nth_drone]),
-                                                      physicsClientId=self.CLIENT
-                                                      )
-            import pdb
-            print('client :', self.CLIENT)
-            print('parentObjectUniqueId= ', self.DRONE_IDS[nth_drone])
-            print('int(self.Z_AX[nth_drone] :',int(self.Z_AX[nth_drone]))
-            pdb.set_trace()
+                self.Y_AX[nth_drone] = pyb.addUserDebugLine(lineFromXYZ=[0, 0, 0],
+                                                            lineToXYZ=[0, AXIS_LENGTH, 0],
+                                                            lineColorRGB=[0, 1, 0],
+                                                            parentObjectUniqueId=self.DRONE_IDS[nth_drone],
+                                                            parentLinkIndex=-1,
+                                                            replaceItemUniqueId=int(self.Y_AX[nth_drone]),
+                                                            physicsClientId=self.CLIENT
+                                                            )
+                self.Z_AX[nth_drone] = pyb.addUserDebugLine(lineFromXYZ=[0, 0, 0],
+                                                            lineToXYZ=[0, 0, AXIS_LENGTH],
+                                                            lineColorRGB=[0, 0, 1],
+                                                            parentObjectUniqueId=self.DRONE_IDS[nth_drone],
+                                                            parentLinkIndex=-1,
+                                                            replaceItemUniqueId=int(self.Z_AX[nth_drone]),
+                                                            physicsClientId=self.CLIENT
+                                                            )
+                import pdb
+                print('client :', self.CLIENT)
+                print('parentObjectUniqueId= ', self.DRONE_IDS[nth_drone])
+                print('int(self.Z_AX[nth_drone] :', int(self.Z_AX[nth_drone]))
+                pdb.set_trace()
 
     ################################################################################
+
 
     def _addObstacles(self):
         """Add obstacles to the environment.
@@ -1786,12 +1313,12 @@ class BaseAviary(gym.Env):
                    pyb.getQuaternionFromEuler([0,0,0]),
                    physicsClientId=self.CLIENT
                    )
-    
+
     ################################################################################
     def _parseURDFFixedwingParameters(self,drone,URDF):
         ''' Loads Fixed-wing related coefficients from URDF file '''
         URDF_TREE = etxml.parse(os.path.dirname(os.path.abspath(__file__))+"/../assets/"+URDF).getroot()
-        
+
         ref = URDF_TREE.find("fixed_wing_aero_coeffs/ref")
         drone.alpha0 = float(ref.attrib['alpha0'])
         drone.Bref = float(ref.attrib['Bref'])
@@ -1814,7 +1341,7 @@ class BaseAviary(gym.Env):
         drone.CD_k2 = float(cd.attrib['CD_k1'])
         vals = str(cd.attrib['CD_ctrl'])
         drone.CD_ctrl = [float(s) for s in vals.split(' ') if s != '']
- 
+
         cy = URDF_TREE.find("fixed_wing_aero_coeffs/CY")
         drone.CY_alpha = float(cy.attrib['CY_alpha'])
         drone.CY_beta = float(cy.attrib['CY_beta'])
@@ -1848,7 +1375,7 @@ class BaseAviary(gym.Env):
         vals = str(cn.attrib['Cn_ctrl'])
         drone.Cn_ctrl = [float(s) for s in vals.split(' ') if s != '']
 
-    ################################################################################        
+    ################################################################################
 
     def _parseURDFVTOLParameters(self, drone, URDF):
         ''' Loads Fixed-wing related coefficients from URDF file '''

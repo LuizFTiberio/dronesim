@@ -10,7 +10,21 @@ import warnings
 from math import sin, cos, log, pi
 # from gym_pybullet_drones.database.propeller_database import *
 
+def Quaternion2Rotation(quaternion):
+    """
+    converts a quaternion attitude to a rotation matrix
+    """
+    e0 = quaternion[0]
+    e1 = quaternion[1]
+    e2 = quaternion[2]
+    e3 = quaternion[3]
 
+    R = np.array([[e1 ** 2.0 + e0 ** 2.0 - e2 ** 2.0 - e3 ** 2.0, 2.0 * (e1 * e2 - e3 * e0), 2.0 * (e1 * e3 + e2 * e0)],
+                  [2.0 * (e1 * e2 + e3 * e0), e2 ** 2.0 + e0 ** 2.0 - e1 ** 2.0 - e3 ** 2.0, 2.0 * (e2 * e3 - e1 * e0)],
+                  [2.0 * (e1 * e3 - e2 * e0), 2.0 * (e2 * e3 + e1 * e0), e3 ** 2.0 + e0 ** 2.0 - e1 ** 2.0 - e2 ** 2.0]])
+    R = R/np.linalg.det(R)
+
+    return R
 
 def R_aero_to_body(alpha, beta):
     """

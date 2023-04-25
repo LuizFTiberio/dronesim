@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 
-<robot name="Falcon">
+<robot name="fixed_wing">
 
   <material name="white">
     <color rgba="1. 1. 1. 1.0"/>
@@ -26,41 +26,41 @@
     <color rgba="1 0.25 0 0.4"/>
   </material>
 
-  <configuration type="winged_vtol_physics"/>
+  <configuration type="_winged_physics"/>
 
 
   <properties arm="0.0" kf="0" km="0" thrust2weight="0" max_speed_kmh="0" gnd_eff_coeff="0" prop_radius="0" drag_coeff_xy="0" drag_coeff_z="0" dw_coeff_1="0" dw_coeff_2="0" dw_coeff_3="0"/>
 
   <control>
      <indi actuator_nr="4" output_nr="4" />
-    <indi_1 roll="   80. -80. -80. 80." />
-    <indi_2 pitch="  600. -600. 600. -600." />
-    <indi_3 yaw="    1500. 1500. -1500. -1500." />
-    <indi_4 thrust=" 1000 1000 1000 1000" />
+    <indi_1 roll="   450. 0. 0 0." />
+    <indi_2 pitch="  0. 2200. 0. 0." />
+    <indi_3 yaw="    0. 0. 250. 0." />
+    <indi_4 thrust=" 0 0 0 -400" />
 
     <indi_guidance_gains>
-      <pos kp="0.8" kd=".65"/>
+      <pos kp="1.3" kd="1."/>
     </indi_guidance_gains>
 
     <indi_att_gains>
-      <att  p="20" q="30." r="25" />
-      <rate p="8." q="8" r="8." />
+      <att  p="30" q="35." r="35" />
+      <rate p="7." q="5" r="7." />
     </indi_att_gains>
 
     <pwm>
       <pwm2rpm scale="0. 0. 0. 0." const="0. 0. 0. 0." />
-      <limit min="0.  0.  0.  0" max="1.  1.  1.  1." />
+      <limit min="-0.45  -0.61  -0.45  0" max="0.45  0.61  0.45  1." />
     </pwm>
   </control>
 
    <aero_coeffs>
     <ref rho="1.225" alpha0="0.47" Sref="0.075" Bref="0.7" Cref="0.105" oswald="0.9" AR="6.5" M="60" actuator_nr="4"/>
-    <CL CL0="0.48115"   CL_alpha="4.28" CL_q="6.689983"   CL_del_e="0"/>
-    <CD CD0="0.06130" CD_q="0.0"  CD_del_e="0"/>
-    <CY CY0="0.0"   CY_beta="-0.049996"  CY_p="0.088261" CY_r="-0.009328"  CY_del_r="0" CY_del_a="0"/>
-    <Cl Cl_beta="-0.047674"  Cl_p="-0.443968" Cl_r="0.119986" Cl_del_a="0" Cl_del_r="0"/>
-    <Cm Cm0="-0.11072" Cm_alpha="-1.042060" Cm_q="-2.406242" Cm_del_e="0"/>
-    <Cn Cn_beta="0.005068"  Cn_p="-0.034716" Cn_r="-0.004010" Cn_del_a="0.0" Cn_del_r="0."/>
+    <CL CL0="0.48115"   CL_alpha="4.28" CL_q="6.689983"   CL_del_e="0.13"/>
+    <CD CD0="0.06130" CD_q="0.0"  CD_del_e="0.0135"/>
+    <CY CY0="0.0"   CY_beta="-0.049996"  CY_p="0.088261" CY_r="-0.009328"  CY_del_r="0" CY_del_a="0.075"/>
+    <Cl Cl_beta="-0.047674"  Cl_p="-0.443968" Cl_r="0.119986" Cl_del_a="0.17" Cl_del_r="0.045"/>
+    <Cm Cm0="0.11072" Cm_alpha="-2.74" Cm_q="-2.406242" Cm_del_e="-0.99"/>
+    <Cn Cn_beta="0.005068"  Cn_p="-0.034716" Cn_r="-0.004010" Cn_del_a="-0.0110" Cn_del_r="-0.095"/>
   </aero_coeffs>
 
   <motor_coeffs>
@@ -115,81 +115,25 @@
     <child link="aerodynamic_center_link"/>
   </joint>
 
-  <link name="UR_link">
+  <link name="prop_link">
     <inertial>
-      <origin rpy="0 0. 0" xyz="0.02 -0.0906 0.09"/>
+      <origin rpy="0 0. 0" xyz="0.0 0 0.0"/>
       <mass value="0"/>
       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
     </inertial>
     <visual>
-      <origin rpy="0 1.92 0" xyz="0.02 -0.0906 0.09"/>
+      <origin rpy="0 1.92 0" xyz="0.0 0 0.0"/>
       <geometry>
         <cylinder radius="0.07" length=".001"/>
       </geometry>
       <material name="orange_red"/>
     </visual>
   </link>
-  <joint name="UR_joint" type="fixed">
+  <joint name="prop_joint" type="fixed">
     <parent link="base_link"/>
-    <child link="UR_link"/>
+    <child link="prop_link"/>
   </joint>
 
-  <link name="LR_link">
-    <inertial>
-      <origin rpy="0 0. 0" xyz="0.02 -0.0906 -0.09"/>
-      <mass value="0"/>
-      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
-    </inertial>
-    <visual>
-      <origin rpy="0 1.40 0" xyz="0.02 -0.0906 -0.09"/>
-      <geometry>
-        <cylinder radius="0.07" length=".001"/>
-      </geometry>
-      <material name="orange_red"/>
-    </visual>
-  </link>
-  <joint name="LR_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="LR_link"/>
-  </joint>
-
-  <link name="UL_link">
-    <inertial>
-      <origin rpy="0 0. 0" xyz="0.02 0.0906 0.09"/>
-      <mass value="0"/>
-      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
-    </inertial>
-    <visual>
-      <origin rpy="0 1.92 0" xyz="0.02 0.0906 0.09"/>
-      <geometry>
-        <cylinder radius="0.07" length=".001"/>
-      </geometry>
-      <material name="orange_red"/>
-    </visual>
-  </link>
-  <joint name="UL_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="UL_link"/>
-  </joint>
-
-  <link name="LL_link">
-    <inertial>
-      <origin rpy="0 0. 0" xyz="0.02 0.0906 -0.09"/>
-      <mass value="0"/>
-      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
-    </inertial>
-    <visual>
-      <origin rpy="0 1.40 0" xyz="0.02 0.0906 -0.09"/>
-      <geometry>
-        <cylinder radius="0.07" length=".001"/>
-      </geometry>
-      <material name="orange_red"/>
-    </visual>
-  </link>
-  <joint name="LL_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="LL_link"/>
-  </joint>
-
+  
 
 </robot>

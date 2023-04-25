@@ -69,6 +69,7 @@ class BaseControl(object):
                                 target_vel=np.zeros(3),
                                 target_rpy_rates=np.zeros(3),
                                 current_wind = np.array([0,0,0,0,0,0]),
+                                nav_type = 'line'
                                 ):
         """Interface method using `computeControl`.
 
@@ -100,7 +101,8 @@ class BaseControl(object):
                                    target_rpy=target_rpy,
                                    target_vel=target_vel,
                                    target_rpy_rates=target_rpy_rates,
-                                   current_wind=current_wind
+                                   current_wind=current_wind,
+                                   nav_type = nav_type,
                                    )
 
     ################################################################################

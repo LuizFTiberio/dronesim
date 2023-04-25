@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--obstacles',          default=False,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
     parser.add_argument('--simulation_freq_hz', default=240,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
     parser.add_argument('--control_freq_hz',    default=96,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--duration_sec',       default=4,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
+    parser.add_argument('--duration_sec',       default=25,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
     ARGS = parser.parse_args()
 
     #### Initialize the simulation #############################
@@ -53,23 +53,17 @@ if __name__ == "__main__":
     R = .6
     AGGR_PHY_STEPS = int(ARGS.simulation_freq_hz/ARGS.control_freq_hz) if ARGS.aggregate else 1
 
-    INIT_XYZS = np.array([[0., 150., 40]])
+    INIT_XYZS = np.array([[0., 0., 40]])
 
     ## To forward X ###
     INIT_RPYS = np.array([[0, 0, 0]])
-    INIT_VELS = np.array([[14, 0., 0]])
+    INIT_VELS = np.array([[11, 0., 0]])
     target_vel = np.array([0, 0, 0])
 
 
     #### Initialize a circular trajectory ######################
     PERIOD = 15
     NUM_WP = ARGS.control_freq_hz*PERIOD
-    trajectory_setpoints = np.array([
-                                     [0,0,40],
-                                     [0,300,40],
-                                     [0, -100, 40],
-                                     #[]
-                                    ])
     ARRIVED_AT_WAYPOINT = 10
 
     # Two options of trajectory
@@ -136,29 +130,17 @@ if __name__ == "__main__":
         if i%CTRL_EVERY_N_STEPS == 0:
 
             x, y, z, = obs[str(0)]["state"][0:3]
-            target_pos = trajectory_setpoints[0]
-            diff = target_pos - np.array([x,y,z])
-            diff_norm = np.linalg.norm(diff)
-            if diff_norm < ARRIVED_AT_WAYPOINT:
-                try:
-                    trajectory_setpoints = np.delete(trajectory_setpoints,0,0)
-                    target_pos = trajectory_setpoints[0]
-                    print("*******SETPOINT VISITED. UPDATING TO :", trajectory_setpoints[0] )
-                except:
-                    print("*******LAST SETPOINT VISITED ********")
-                    break
-            #print(x,y,target_pos)
+            if z < 25:
+                break
 
             #### Compute control for the current way point #############
             for j in range(ARGS.num_drones):
                 action[str(j)], _, _ = ctrl[j].computeControlFromState(control_timestep=CTRL_EVERY_N_STEPS*env.TIMESTEP,
                                                                        state=obs[str(j)]["state"],
-                                                                       target_pos= target_pos,
+                                                                       target_pos= [0,0,0],
                                                                        target_vel=target_vel,
-                                                                       current_wind = current_wind.reshape((6)),
-                                                                       nav_type = 'circle')
-
-
+                                                                       current_wind=current_wind.reshape((6)),
+                                                                       nav_type = 'GVF')
         #### Camera View follows the vehicle #######################
         if i%(CTRL_EVERY_N_STEPS*1) == 0:
             x,y,z, = obs[str(0)]["state"][0:3]
@@ -207,9 +189,9 @@ if __name__ == "__main__":
     if ARGS.plot:
         logger.plot()
 
-    angle = np.arange(0, 2 * np.pi, 0.01)
-    nominal_traj_x = 150 * np.cos(angle)
-    nominal_traj_y = 150 * np.sin(angle)
+    angle = np.arange(0, 2*np.pi , 0.01)
+    nominal_traj_x = 200 * np.cos(angle)
+    nominal_traj_y = 200 * np.sin(angle)
 
     states_logger = np.array(states_logger)
     logging_freq_hz = int(ARGS.simulation_freq_hz / AGGR_PHY_STEPS)
@@ -227,5 +209,5 @@ if __name__ == "__main__":
     axs[1].set_xlabel('time [s]')
     axs[1].set_ylabel('Z [m]')
     axs[0].set_aspect(1)
-    # axs[1].set_aspect(1)
+    #axs[1].set_aspect(1)
     plt.show()

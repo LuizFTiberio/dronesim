@@ -142,7 +142,7 @@ vehicleStartOrientation = p.getQuaternionFromEuler([0,0, 0])
 
 servo1Id = p.addUserDebugParameter("serv1", -1.5, 1.5, 0)
 servo2Id = p.addUserDebugParameter("serv2", -0.3, 0.3, 0)
-vehicle = p.loadURDF("../dronesim/assets/Falcon.urdf", vehicleStartPos, vehicleStartOrientation)
+vehicle = p.loadURDF("../dronesim/assets/fixed_wing.urdf", vehicleStartPos, vehicleStartOrientation)
 v_Pos, v_cubeOrn = p.getBasePositionAndOrientation(vehicle)
 
 useRealTimeSimulation = 0
@@ -203,92 +203,20 @@ while 1:
     servo2 = p.readUserDebugParameter(servo2Id)
 
     #p.applyExternalForce(vehicle,
-    #                     -1,  # link number
-    #                     forceObj=[10, 0,0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
-#
-    #p.applyExternalForce(vehicle,
-    #                     1,  # link number
-    #                     forceObj=[0, 0, 0],
+    #                     2,  # link number
+    #                     forceObj=[.1, 0,0],
     #                     posObj=[0, 0, 0],
     #                     flags=p.LINK_FRAME,
     #                     physicsClientId=physicsClient
     #                     )
 
-    #p.applyExternalForce(vehicle,
-    #                     1,  # link number
-    #                     forceObj=[servo2/50, 0, 0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
-#
-    #p.applyExternalForce(vehicle,
-    #                     2,  # link number
-    #                     forceObj=[servo2/50, 0, 0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
-#
-    #p.applyExternalForce(vehicle,
-    #                     3,  # link number
-    #                     forceObj=[servo2/50, 0, 0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
-#
-    #p.applyExternalForce(vehicle,
-    #                     4,  # link number
-    #                     forceObj=[servo2/50, 0, 0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
-#
     p.applyExternalTorque(vehicle,
                            1,
-                           torqueObj=[-1/8000,0,0],
+                           torqueObj=[1/8000,0,0],
                            flags=p.LINK_FRAME,
                            physicsClientId=physicsClient
                            )
-    #v_Pos, v_cubeOrn = p.getBasePositionAndOrientation(vehicle)
-    #R_vb = np.array(p.getMatrixFromQuaternion(v_cubeOrn)).reshape(3, 3)
-##
-    #v_cubeOrn = np.array([v_cubeOrn[3],v_cubeOrn[0],v_cubeOrn[1],v_cubeOrn[2]])
-    #b_cur_rpy = np.array(get_euler_from_quaternion_ZXY(v_cubeOrn))
-    #print(np.degrees(b_cur_rpy))
-    #u,v,w = p.getBaseVelocity(vehicle)[0]
-    #R_vb = Quaternion2Rotation(v_cubeOrn).T
-    #steady_state = current_wind[0:3]
-    #gust = current_wind[3:6]
-    #v_air_i = np.array( p.getBaseVelocity(vehicle)[0])
-    #v_air_b = R_vb.T.dot(v_air_i)
-    #wind_body_frame = R_vb @ steady_state + gust
-    #ur = v_air_b[0] - wind_body_frame[0]
-    #vr = v_air_b[1] - wind_body_frame[1]
-    #wr = v_air_b[2] - wind_body_frame[2]
-    ## compute airspeed
-    #Va = np.sqrt(ur ** 2 + vr ** 2 + wr ** 2)[0]
-    ## compute angle of attack
-    #if ur == 0:
-    #    alpha = np.sign(wr) * np.pi / 2
-    #else:
-    #    alpha = np.arctan(wr / ur)
-    ## compute sideslip angle
-    #if Va == 0:
-    #    beta = np.sign(vr) * np.pi / 2
-    #else:
-    #    beta = np.arcsin(vr / np.sqrt(ur ** 2 + vr ** 2 + wr ** 2))
-#
-    #alpha = alpha[0]
-    #beta = beta[0]
-    ##print(np.degrees(b_cur_rpy),np.degrees(alpha),np.degrees(beta),u,v,w,v_air_b)
-    #print(u,v_Pos)
+
 
 
     if not useRealTimeSimulation:

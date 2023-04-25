@@ -271,7 +271,7 @@ class Logger(object):
 
         #### Time ##################################################
         row = 9
-        axs[row, col].plot(self.states[j, 1, :], self.states[j, 0, :], label="xy trajectory")
+        axs[row, col].plot(self.states[j, 0, :], self.states[j, 1, :], label="xy trajectory")
         axs[row, col].set_xlabel('y')
         axs[row, col].set_ylabel('x')
 
@@ -317,10 +317,10 @@ class Logger(object):
 
         ### This IF converts RPM into PWM for all drones ###########
         #### except drone_0 (only used in examples/compare.py) #####
-        for j in range(self.NUM_DRONES):
-            for i in range(12,16):
-                if pwm and j > 0:
-                    self.states[j, i, :] = (self.states[j, i, :] - 4070.3) / 0.2685
+        #for j in range(self.NUM_DRONES):
+        #    for i in range(12,16):
+        #        if pwm and j > 0:
+        #            self.states[j, i, :] = (self.states[j, i, :] - 4070.3) / 0.2685
 
         #### RPMs ##################################################
         row = 6
