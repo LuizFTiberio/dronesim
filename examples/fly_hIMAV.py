@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument('--obstacles',          default=False,       type=str2bool,      help='Whether to add obstacles to the environment (default: True)', metavar='')
     parser.add_argument('--simulation_freq_hz', default=240,        type=int,           help='Simulation frequency in Hz (default: 240)', metavar='')
     parser.add_argument('--control_freq_hz',    default=96,         type=int,           help='Control frequency in Hz (default: 48)', metavar='')
-    parser.add_argument('--duration_sec',       default=200,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
+    parser.add_argument('--duration_sec',       default=5,         type=int,           help='Duration of the simulation in seconds (default: 5)', metavar='')
     ARGS = parser.parse_args()
 
     #### Initialize the simulation #############################
@@ -64,9 +64,9 @@ if __name__ == "__main__":
     PERIOD = 15
     NUM_WP = ARGS.control_freq_hz*PERIOD
     trajectory_setpoints = np.array([
-                                     [150,200,40,'line'],
-                                     [150,-200,40,'circle'],
-                                     [-200,-200,40,'line'],
+                                     [150,200,40],
+                                     [150,-200,40],
+                                     [-200,-200,40],
                                      ])
     ARRIVED_AT_WAYPOINT = 25
 
@@ -160,7 +160,8 @@ if __name__ == "__main__":
                                                                        state=obs[str(j)]["state"],
                                                                        target_pos= target_pos,
                                                                        target_vel=target_vel,
-                                                                       current_wind = current_wind.reshape((6)))
+                                                                       current_wind=current_wind.reshape((6)),
+                                                                       nav_type='line')
 
             controls_logger.append(action[str(j)])
             carrot_x_logger.append(carrot_x)

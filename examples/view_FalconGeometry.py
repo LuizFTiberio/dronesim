@@ -8,6 +8,7 @@ from dronesim.utils.wind_simulation import WindSimulation
 from dataclasses import dataclass
 from dronesim.control.INDIControl import *
 from dronesim.utils.utils import *
+import matplotlib.pyplot as plt
 
 
 @dataclass
@@ -197,72 +198,58 @@ u = 15
 v = 0
 w = 0
 p.changeDynamics(1, 0, linearDamping=0, angularDamping=0, lateralFriction=0,spinningFriction=0,rollingFriction=0,)
-
-while 1:
+u_array = []
+t = []
+tt = 0
+while tt < 5:
     servo1 = p.readUserDebugParameter(servo1Id)
     servo2 = p.readUserDebugParameter(servo2Id)
 
-    #p.applyExternalForce(vehicle,
-    #                     -1,  # link number
-    #                     forceObj=[10, 0,0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
-#
-    #p.applyExternalForce(vehicle,
-    #                     1,  # link number
-    #                     forceObj=[0, 0, 0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
 
-    #p.applyExternalForce(vehicle,
-    #                     1,  # link number
-    #                     forceObj=[servo2/50, 0, 0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
+    p.applyExternalForce(vehicle,
+                         2,  # link number
+                         forceObj=[1, 0, 0],
+                         posObj=[0, 0, 0],
+                         flags=p.LINK_FRAME,
+                         physicsClientId=physicsClient
+                         )
 #
-    #p.applyExternalForce(vehicle,
-    #                     2,  # link number
-    #                     forceObj=[servo2/50, 0, 0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
+    p.applyExternalForce(vehicle,
+                         3,  # link number
+                         forceObj=[1, 0, 0],
+                         posObj=[0, 0, 0],
+                         flags=p.LINK_FRAME,
+                         physicsClientId=physicsClient
+                         )
 #
-    #p.applyExternalForce(vehicle,
-    #                     3,  # link number
-    #                     forceObj=[servo2/50, 0, 0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
+    p.applyExternalForce(vehicle,
+                         4,  # link number
+                         forceObj=[1, 0, 0],
+                         posObj=[0, 0, 0],
+                         flags=p.LINK_FRAME,
+                         physicsClientId=physicsClient
+                         )
+    p.applyExternalForce(vehicle,
+                         5,  # link number
+                         forceObj=[1, 0, 0],
+                         posObj=[0, 0, 0],
+                         flags=p.LINK_FRAME,
+                         physicsClientId=physicsClient
+                         )
 #
-    #p.applyExternalForce(vehicle,
-    #                     4,  # link number
-    #                     forceObj=[servo2/50, 0, 0],
-    #                     posObj=[0, 0, 0],
-    #                     flags=p.LINK_FRAME,
-    #                     physicsClientId=physicsClient
-    #                     )
-#
-    p.applyExternalTorque(vehicle,
-                           1,
-                           torqueObj=[-1/8000,0,0],
-                           flags=p.LINK_FRAME,
-                           physicsClientId=physicsClient
-                           )
+    #p.applyExternalTorque(vehicle,
+    #                       1,
+    #                       torqueObj=[0,0,0],
+    #                       flags=p.LINK_FRAME,
+    #                       physicsClientId=physicsClient
+    #                       )
     #v_Pos, v_cubeOrn = p.getBasePositionAndOrientation(vehicle)
     #R_vb = np.array(p.getMatrixFromQuaternion(v_cubeOrn)).reshape(3, 3)
 ##
     #v_cubeOrn = np.array([v_cubeOrn[3],v_cubeOrn[0],v_cubeOrn[1],v_cubeOrn[2]])
     #b_cur_rpy = np.array(get_euler_from_quaternion_ZXY(v_cubeOrn))
     #print(np.degrees(b_cur_rpy))
-    #u,v,w = p.getBaseVelocity(vehicle)[0]
+    u,v,w = p.getBaseVelocity(vehicle)[0]
     #R_vb = Quaternion2Rotation(v_cubeOrn).T
     #steady_state = current_wind[0:3]
     #gust = current_wind[3:6]
@@ -288,9 +275,22 @@ while 1:
     #alpha = alpha[0]
     #beta = beta[0]
     ##print(np.degrees(b_cur_rpy),np.degrees(alpha),np.degrees(beta),u,v,w,v_air_b)
-    #print(u,v_Pos)
+    print(u,v,w)
+    u_array.append(u)
+    t.append(tt)
+    tt += 0.01
 
 
     if not useRealTimeSimulation:
         p.stepSimulation(physicsClientId=physicsClient)
     sleep(0.01)  # Time in seconds.
+
+plt.plot(t,u_array)
+plt.show()
+
+us = np.array(u_array)
+ts = np.array(t)
+accel = 4*np.cos(.35)/0.728
+accel_s = us / ts
+print(accel,accel_s)
+
