@@ -201,41 +201,68 @@ p.changeDynamics(1, 0, linearDamping=0, angularDamping=0, lateralFriction=0,spin
 u_array = []
 t = []
 tt = 0
-while tt < 5:
+while True:
     servo1 = p.readUserDebugParameter(servo1Id)
     servo2 = p.readUserDebugParameter(servo2Id)
 
+    p.applyExternalTorque(vehicle,
+                          1,  # link number
+                          torqueObj=[0, 0, servo2/1000],
+                          flags=p.LINK_FRAME,
+                          physicsClientId=physicsClient
+                          )
 
-    p.applyExternalForce(vehicle,
-                         2,  # link number
-                         forceObj=[1, 0, 0],
-                         posObj=[0, 0, 0],
-                         flags=p.LINK_FRAME,
-                         physicsClientId=physicsClient
-                         )
+
+    #p.applyExternalTorque(vehicle,
+    #                     2,  # link number
+    #                      torqueObj=[0.00, 0, 0],
+    #                      flags=p.LINK_FRAME,
+    #                      physicsClientId=physicsClient
+    #                     )
 #
-    p.applyExternalForce(vehicle,
-                         3,  # link number
-                         forceObj=[1, 0, 0],
-                         posObj=[0, 0, 0],
-                         flags=p.LINK_FRAME,
-                         physicsClientId=physicsClient
-                         )
+    #p.applyExternalTorque(vehicle,
+    #                      3,  # link number
+    #                      torqueObj=[-0.001/np.cos(.35), 0, 0],
+    #                      flags=p.LINK_FRAME,
+    #                      physicsClientId=physicsClient
+    #                      )
 #
-    p.applyExternalForce(vehicle,
-                         4,  # link number
-                         forceObj=[1, 0, 0],
-                         posObj=[0, 0, 0],
-                         flags=p.LINK_FRAME,
-                         physicsClientId=physicsClient
-                         )
-    p.applyExternalForce(vehicle,
-                         5,  # link number
-                         forceObj=[1, 0, 0],
-                         posObj=[0, 0, 0],
-                         flags=p.LINK_FRAME,
-                         physicsClientId=physicsClient
-                         )
+    #p.applyExternalTorque(vehicle,
+    #                      4,  # link number
+    #                      torqueObj=[-0.001/np.cos(.35), 0, 0],
+    #                      flags=p.LINK_FRAME,
+    #                      physicsClientId=physicsClient
+    #                      )
+#
+    #p.applyExternalTorque(vehicle,
+    #                      5,  # link number
+    #                      torqueObj=[0.00, 0, 0],
+    #                      flags=p.LINK_FRAME,
+    #                      physicsClientId=physicsClient
+    #                      )
+#
+    #p.applyExternalForce(vehicle,
+    #                     3,  # link number
+    #                     forceObj=[1, 0, 0],
+    #                     posObj=[0, 0, 0],
+    #                     flags=p.LINK_FRAME,
+    #                     physicsClientId=physicsClient
+    #                     )
+##
+    #p.applyExternalForce(vehicle,
+    #                     4,  # link number
+    #                     forceObj=[1, 0, 0],
+    #                     posObj=[0, 0, 0],
+    #                     flags=p.LINK_FRAME,
+    #                     physicsClientId=physicsClient
+    #                     )
+    #p.applyExternalForce(vehicle,
+    #                     5,  # link number
+    #                     forceObj=[1, 0, 0],
+    #                     posObj=[0, 0, 0],
+    #                     flags=p.LINK_FRAME,
+    #                     physicsClientId=physicsClient
+    #                     )
 #
     #p.applyExternalTorque(vehicle,
     #                       1,
@@ -250,6 +277,8 @@ while tt < 5:
     #b_cur_rpy = np.array(get_euler_from_quaternion_ZXY(v_cubeOrn))
     #print(np.degrees(b_cur_rpy))
     u,v,w = p.getBaseVelocity(vehicle)[0]
+    roll,q,r = p.getBaseVelocity(vehicle)[1]
+    print(roll,q,r)
     #R_vb = Quaternion2Rotation(v_cubeOrn).T
     #steady_state = current_wind[0:3]
     #gust = current_wind[3:6]
@@ -275,22 +304,22 @@ while tt < 5:
     #alpha = alpha[0]
     #beta = beta[0]
     ##print(np.degrees(b_cur_rpy),np.degrees(alpha),np.degrees(beta),u,v,w,v_air_b)
-    print(u,v,w)
-    u_array.append(u)
-    t.append(tt)
-    tt += 0.01
+    #print(u,v,w)
+    #u_array.append(u)
+    #t.append(tt)
+    #tt += 0.01
 
 
     if not useRealTimeSimulation:
         p.stepSimulation(physicsClientId=physicsClient)
     sleep(0.01)  # Time in seconds.
 
-plt.plot(t,u_array)
-plt.show()
-
-us = np.array(u_array)
-ts = np.array(t)
-accel = 4*np.cos(.35)/0.728
-accel_s = us / ts
-print(accel,accel_s)
+#plt.plot(t,u_array)
+#plt.show()
+#
+#us = np.array(u_array)
+#ts = np.array(t)
+#accel = 4*np.cos(.35)/0.728
+#accel_s = us / ts
+#print(accel,accel_s)
 

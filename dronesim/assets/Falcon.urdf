@@ -32,19 +32,20 @@
   <properties arm="0.0" kf="0" km="0" thrust2weight="0" max_speed_kmh="0" gnd_eff_coeff="0" prop_radius="0" drag_coeff_xy="0" drag_coeff_z="0" dw_coeff_1="0" dw_coeff_2="0" dw_coeff_3="0"/>
 
   <control>
-     <indi actuator_nr="4" output_nr="4" />
-    <indi_1 roll="   700. -700. -700. 700." />
-    <indi_2 pitch="  600. -600. 600. -600." />
-    <indi_3 yaw="    1500. 1500. -1500. -1500." />
-    <indi_4 thrust=" 800 800 800 800" />
+  <indi actuator_nr="4" output_nr="4" />
+    <indi_1 roll="   90. -90. -90. 90." />
+    <indi_2 pitch="  750.  -750. 750. -750." />
+    <indi_3 yaw="    720. 720. -720. -720." />
+    <indi_4 thrust=" -20 -20 -20 -20" />
 
     <indi_guidance_gains>
-      <pos kp="1.3" kd="1."/>
+      <pos kp="0.2" kd="1." kpz="40" kdz="1.5"/>
+      <accel heading="25" kbeta="100"/>
     </indi_guidance_gains>
 
     <indi_att_gains>
-      <att  p="30" q="35." r="35" />
-      <rate p="7." q="5" r="7." />
+      <att  p="100" q="80." r="90" />
+      <rate p="30." q="18" r="6." />
     </indi_att_gains>
 
     <pwm>
@@ -69,13 +70,13 @@
 
   <link name="base_link">
     <inertial>
-      <origin rpy="0 0 0" xyz="0.026 0. 0"/>
+      <origin rpy="0 0 0" xyz="0.005 0. 0"/>
       <mass value="0.728"/>
-      <inertia ixx="0.0061" iyy="0.0010" izz="0.0058"/>
+      <inertia ixx="0.0076" iyy="0.0053" izz="0.0067"/>
     </inertial>
 
     <visual>
-      <origin rpy="0 0. 0" xyz="0.026 0. 0.0"/>
+      <origin rpy="0 0. 0" xyz="0.005 0. 0.0"/>
       <geometry>
         <mesh filename="./Falcon.obj" scale="1. 1. 1."/>
       </geometry>
@@ -83,7 +84,7 @@
     </visual>
 
     <collision>
-      <origin rpy="0 0 0" xyz="0.026 0. 0"/>
+      <origin rpy="0 0 0" xyz="0.005 0. 0"/>
       <geometry>
         <cylinder radius="0.15" length=".1"/>
         <mesh filename="./Falcon.obj" scale="1. 1. 1."/>
@@ -93,7 +94,7 @@
 
   <link name="center_of_mass_link">
     <inertial>
-      <origin rpy="0 0 0" xyz="0.026 0. 0"/>
+      <origin rpy="0 0 0" xyz="0.005 0. 0"/>
       <mass value="0"/>
       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
     </inertial>
@@ -105,7 +106,7 @@
 
   <link name="aerodynamic_center_link">
     <inertial>
-      <origin rpy="0 0 0" xyz="0.026 0. 0"/>
+      <origin rpy="0 0 0" xyz="0.025 0. 0"/>
       <mass value="0"/>
       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
     </inertial>
@@ -117,12 +118,12 @@
 
   <link name="UR_link">
     <inertial>
-      <origin rpy="0 0.35 0" xyz="0.02 -0.0906 0.09"/>
+      <origin rpy="0 0.35 0" xyz="-0.03 -0.15 0.1"/>
       <mass value="0"/>
       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
     </inertial>
     <visual>
-      <origin rpy="0 1.92 0" xyz="0.02 -0.0906 0.09"/>
+      <origin rpy="0 1.92 0" xyz="0.0 -0.15 0.1"/>
       <geometry>
         <cylinder radius="0.07" length=".001"/>
       </geometry>
@@ -136,12 +137,12 @@
 
   <link name="LR_link">
     <inertial>
-      <origin rpy="0 -0.35 0" xyz="0.02 -0.0906 -0.09"/>
+      <origin rpy="0 -0.35 0" xyz="-0.03 -0.15 -0.1"/>
       <mass value="0"/>
       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
     </inertial>
     <visual>
-      <origin rpy="0 1.40 0" xyz="0.02 -0.0906 -0.09"/>
+      <origin rpy="0 1.40 0" xyz="0.02 -0.15 -0.1"/>
       <geometry>
         <cylinder radius="0.07" length=".001"/>
       </geometry>
@@ -155,12 +156,12 @@
 
   <link name="UL_link">
     <inertial>
-      <origin rpy="0 0.35 0" xyz="0.02 0.0906 0.09"/>
+      <origin rpy="0 0.35 0" xyz="-0.03 0.15 0.1"/>
       <mass value="0"/>
       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
     </inertial>
     <visual>
-      <origin rpy="0 1.92 0" xyz="0.02 0.0906 0.09"/>
+      <origin rpy="0 1.92 0" xyz="0.02 0.15 0.1"/>
       <geometry>
         <cylinder radius="0.07" length=".001"/>
       </geometry>
@@ -174,12 +175,12 @@
 
   <link name="LL_link">
     <inertial>
-      <origin rpy="0 -0.35 0" xyz="0.02 0.0906 -0.09"/>
+      <origin rpy="0 -0.35 0" xyz="-0.03 0.15 -0.1"/>
       <mass value="0"/>
       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
     </inertial>
     <visual>
-      <origin rpy="0 1.40 0" xyz="0.02 0.0906 -0.09"/>
+      <origin rpy="0 1.40 0" xyz="0.02 0.15 -0.1"/>
       <geometry>
         <cylinder radius="0.07" length=".001"/>
       </geometry>

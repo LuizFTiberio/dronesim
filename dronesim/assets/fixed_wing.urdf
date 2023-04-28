@@ -39,7 +39,8 @@
     <indi_4 thrust=" 0 0 0 -400" />
 
     <indi_guidance_gains>
-      <pos kp="1.3" kd="1."/>
+      <pos kp="1.3" kd="1." kpz="40" kdz="2" />
+      <accel heading="18" kbeta="21"/>
     </indi_guidance_gains>
 
     <indi_att_gains>
