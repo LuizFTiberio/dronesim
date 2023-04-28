@@ -958,7 +958,6 @@ class BaseAviary(gym.Env):
                                  drone.Cn_r * r * drone.Bref / (2 * Va) +
                                  drone.Cn_del_a * cmd_aileron + drone.Cn_del_r * cmd_rudder)
 
-
         ### AERO FORCES
         pyb.applyExternalForce(self.DRONE_IDS[nth_drone],
                                1,

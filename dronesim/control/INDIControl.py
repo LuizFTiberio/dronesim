@@ -579,7 +579,6 @@ class INDIControl(BaseControl):
                                           cur_quat,
                                           cur_ang_vel,
                                           computed_target_rpy)
-
         return rpm, 0,0
 
     
@@ -915,7 +914,7 @@ class INDIControl(BaseControl):
         thrust = euler_cmd[2]
 
 
-        max_phi = np.radians(30)
+        max_phi = np.radians(45)
         airspeed_turn = np.clip(airspeed,10,30)
         guidance_euler_cmd = np.zeros(3)
         guidance_euler_cmd[0] = -phi - euler_cmd[0]
@@ -1042,7 +1041,7 @@ class INDIControl(BaseControl):
             The current position error.
 
         """
-        guidance_indi_max_airspeed = 28
+        guidance_indi_max_airspeed = 22
         heading_bank_gain = self.guidance_indi_heading_gain
         speed_gain =self.guidance_indi_speed_gain
         speed_gainz = self.guidance_indi_speed_gain*2#self.guidance_indi_speed_gainz

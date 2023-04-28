@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     #### Define and parse (optional) arguments for the script ##
     parser = argparse.ArgumentParser(description='Helix flight script using CtrlAviary or VisionAviary and DSLPIDControl')
-    parser.add_argument('--drone',              default=['Falcon'],  type=list,    help='Drone model (default: CF2X)', metavar='', choices=[DroneModel])
+    parser.add_argument('--drone',              default=['Falcon_opt'],  type=list,    help='Drone model (default: CF2X)', metavar='', choices=[DroneModel])
     parser.add_argument('--num_drones',         default=1,          type=int,           help='Number of drones (default: 3)', metavar='')
     parser.add_argument('--physics',            default="pyb",      type=Physics,       help='Physics updates (default: PYB)', metavar='', choices=Physics)
     parser.add_argument('--vision',             default=False,      type=str2bool,      help='Whether to use VisionAviary (default: False)', metavar='')
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     NUM_WP = ARGS.control_freq_hz*PERIOD
     trajectory_setpoints = np.array([
 
-                                     [500,-10,50],
+                                     [500,0,50],
                                     ])
     ARRIVED_AT_WAYPOINT = 10
 
@@ -136,7 +136,7 @@ if __name__ == "__main__":
         if i%CTRL_EVERY_N_STEPS == 0:
 
             x, y, z, = obs[str(0)]["state"][0:3]
-            if z < 10:
+            if z < 10 or z>65:
                 break
             target_pos = trajectory_setpoints[0]
             diff = target_pos - np.array([x,y,z])
@@ -214,28 +214,28 @@ if __name__ == "__main__":
     nominal_traj_x = 250 * np.cos(angle)
     nominal_traj_y = 250 * np.sin(angle)
 
-    #states_logger = np.array(states_logger)
-    #np.save('falcon_baseline_Wind6x2y',states_logger)
+    states_logger = np.array(states_logger)
+    np.save('falcon_baseline_Wind',states_logger)
 
     controls_logger = np.array(controls_logger)
-    np.save('Controls_falcon_baseline_noWind', controls_logger)
+    np.save('Controls_falcon_baseline_Wind', controls_logger)
 
 
-    #logging_freq_hz = int(ARGS.simulation_freq_hz / AGGR_PHY_STEPS)
-    #states_x = states_logger[:, 0]
-    #states_y = states_logger[:, 1]
-    #states_z = states_logger[:, 2]
-    #t = np.arange(0, len(states_z) / logging_freq_hz, 1 / logging_freq_hz)
-    #fig, axs = plt.subplots(1, 2, figsize=(10, 4))
-    #axs[0].plot(states_y, states_x, label='real traj')
-    #axs[0].plot(nominal_traj_y, nominal_traj_x, '.',color = 'blue', label = 'desired traj')
-    #axs[0].set_xlabel('Y [m]')
-    #axs[0].set_ylabel('X [m]')
-    #axs[0].legend(loc='upper right')
+    logging_freq_hz = int(ARGS.simulation_freq_hz / AGGR_PHY_STEPS)
+    states_x = states_logger[:, 0]
+    states_y = states_logger[:, 1]
+    states_z = states_logger[:, 2]
+    t = np.arange(0, len(states_z) / logging_freq_hz, 1 / logging_freq_hz)
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4))
+    axs[0].plot(states_y, states_x, label='real traj')
+    axs[0].plot(nominal_traj_y, nominal_traj_x, '.',color = 'blue', label = 'desired traj')
+    axs[0].set_xlabel('Y [m]')
+    axs[0].set_ylabel('X [m]')
+    axs[0].legend(loc='upper right')
     ##axs[1].plot(t, states_z)
     #axs[1].set_xlabel('time [s]')
     #axs[1].set_ylabel('Z [m]')
     #axs[0].set_aspect(1)
     ## axs[1].set_aspect(1)
-    #plt.show()
+    plt.show()
     #print(t[-1])
